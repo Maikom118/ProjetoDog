@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PawPrint, Home, Heart, Mail, Lock, ArrowLeft } from 'lucide-react';
+import { PawPrint, Home, Heart, Mail, Lock, ArrowLeft, HandHeart } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
@@ -35,39 +35,38 @@ export function LoginPage() {
               <h1 className="text-4xl font-bold text-gray-800">PetConnect</h1>
             </div>
             <p className="text-gray-600 text-lg">
-              Conectando pets com cuidadores de confiança
+              Pets em lares reais com cuidadores especiais
             </p>
           </div>
 
           {/* Hero Image */}
-          <div className="mb-10 rounded-2xl overflow-hidden shadow-lg">
+          <div className="mb-10 rounded-2xl overflow-hidden shadow-lg aspect-[2/1] md:aspect-[6/2]">
             <img
               src="https://images.unsplash.com/photo-1509205477838-a534e43a849f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGRvZyUyMGNhdCUyMHRvZ2V0aGVyfGVufDF8fHx8MTc3MjEwMTYyMnww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
               alt="Pets felizes"
-              className="w-full h-64 object-cover"
+              className="w-full h-full object-cover"
             />
           </div>
 
           {/* User Type Selection */}
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Dono de Pet */}
+            {/* Tutor de Pet */}
             <Card
               className="p-8 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-orange-300 bg-white"
               onClick={() => setUserType('owner')}
             >
               <div className="flex flex-col items-center text-center space-y-4">
                 <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center">
-                  <Heart className="w-10 h-10 text-orange-500" />
+                  <PawPrint className="w-10 h-10 text-orange-500" />
                 </div>
                 <h2 className="text-2xl font-semibold text-gray-800">
-                  Sou Dono de Pet
+                  Sou tutor de pet
                 </h2>
                 <p className="text-gray-600">
-                  Encontre cuidadores confiáveis para seu pet enquanto você viaja
-                  ou tem compromissos
+                  Encontre cuidadores confiáveis para cuidar do seu pet enquanto você viaja ou tem compromissos
                 </p>
                 <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">
-                  Entrar como Dono
+                  Entrar como tutor
                 </Button>
               </div>
             </Card>
@@ -79,17 +78,16 @@ export function LoginPage() {
             >
               <div className="flex flex-col items-center text-center space-y-4">
                 <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center">
-                  <Home className="w-10 h-10 text-amber-600" />
+                  <HandHeart className="w-10 h-10 text-amber-600" />
                 </div>
                 <h2 className="text-2xl font-semibold text-gray-800">
-                  Sou Cuidador
+                  Sou cuidador
                 </h2>
                 <p className="text-gray-600">
-                  Ofereça hospedagem para pets e ganhe uma renda extra ajudando
-                  famílias
+                  Ofereça cuidados com amor e segurança para pets de quem confia em você
                 </p>
                 <Button className="w-full bg-amber-500 hover:bg-amber-600 text-white">
-                  Entrar como Cuidador
+                  Entrar como cuidador
                 </Button>
               </div>
             </Card>
@@ -125,19 +123,19 @@ export function LoginPage() {
               }}
             >
               {isOwner ? (
-                <Heart className="w-8 h-8" style={{ color: '#f97316' }} />
+                <PawPrint className="w-8 h-8" style={{ color: '#f97316' }} />
               ) : (
-                <Home className="w-8 h-8" style={{ color: '#d97706' }} />
+                <HandHeart className="w-8 h-8" style={{ color: '#d97706' }} />
               )}
             </div>
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {isOwner ? 'Login - Dono de Pet' : 'Login - Cuidador'}
+            {isOwner ? 'Login - Tutor de Pet' : 'Login - Cuidador'}
           </h2>
           <p className="text-gray-600">
             {isOwner
               ? 'Entre para encontrar cuidadores'
-              : 'Entre para oferecer seus serviços'}
+              : 'Entre para oferecer cuidados'}
           </p>
         </div>
 
@@ -210,13 +208,6 @@ export function LoginPage() {
             </a>
           </div>
         </form>
-
-        {/* Decorative paw prints */}
-        <div className="mt-8 flex justify-center gap-4 opacity-20">
-          <PawPrint className="w-6 h-6 text-gray-400" />
-          <PawPrint className="w-6 h-6 text-gray-400" />
-          <PawPrint className="w-6 h-6 text-gray-400" />
-        </div>
       </Card>
     </div>
   );
