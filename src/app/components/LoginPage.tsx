@@ -1,27 +1,73 @@
 import { useState } from 'react';
-import { PawPrint, Home, Heart, Mail, Lock, ArrowLeft, HandHeart } from 'lucide-react';
+import { User, PawPrint, Home, Heart, Mail, Lock, ArrowLeft, HandHeart } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
 import { Label } from './ui/label';
 
+import { toast } from 'sonner';
+
 type UserType = 'owner' | 'caregiver' | null;
 
-export function LoginPage() {
+interface LoginPageProps {
+  onLoginSuccess: (user: any) => void;
+}
+
+export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [userType, setUserType] = useState<UserType>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login:', { userType, email, password });
-    // Aqui seria integrado com o sistema de autenticação
+
+    if (isRegistering && password !== confirmPassword) {
+      toast.error('As senhas não coincidem!');
+      return;
+    }
+    
+    const endpoint = isRegistering ? '/api/register' : '/api/login';
+    const payload = isRegistering 
+      ? { email, password, userType, name } 
+      : { email, password, userType };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = response.headers.get("content-type");
+      let data;
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await response.json();
+      }
+
+      if (response.ok) {
+        toast.success(data?.message || 'Operação realizada com sucesso');
+        if (data?.user) {
+          onLoginSuccess(data.user);
+        }
+      } else {
+        toast.error(data?.message || `Erro ${response.status}: Falha na operação`);
+      }
+    } catch (error) {
+      console.error('API error:', error);
+      toast.error('Erro de conexão com o servidor');
+    }
   };
 
   const resetSelection = () => {
     setUserType(null);
     setEmail('');
     setPassword('');
+    setConfirmPassword('');
+    setName('');
+    setIsRegistering(false);
   };
 
   if (userType === null) {
@@ -97,9 +143,16 @@ export function LoginPage() {
     );
   }
 
-  // Login Form
+  // Login/Register Form
   const isOwner = userType === 'owner';
   const primaryColor = isOwner ? 'orange' : 'amber';
+  const title = isRegistering 
+    ? (isOwner ? 'Cadastro - Tutor de Pet' : 'Cadastro - Cuidador')
+    : (isOwner ? 'Login - Tutor de Pet' : 'Login - Cuidador');
+  
+  const subtitle = isRegistering
+    ? 'Crie sua conta para começar'
+    : (isOwner ? 'Entre para encontrar cuidadores' : 'Entre para oferecer cuidados');
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-4">
@@ -130,17 +183,35 @@ export function LoginPage() {
             </div>
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {isOwner ? 'Login - Tutor de Pet' : 'Login - Cuidador'}
+            {title}
           </h2>
           <p className="text-gray-600">
-            {isOwner
-              ? 'Entre para encontrar cuidadores'
-              : 'Entre para oferecer cuidados'}
+            {subtitle}
           </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleLogin} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {isRegistering && (
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-gray-700">
+                Nome Completo
+              </Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Seu nome"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="email" className="text-gray-700">
               Email
@@ -177,15 +248,37 @@ export function LoginPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center gap-2 text-gray-600">
-              <input type="checkbox" className="rounded" />
-              Lembrar-me
-            </label>
-            <a href="#" className="text-gray-600 hover:underline">
-              Esqueci minha senha
-            </a>
-          </div>
+          {isRegistering && (
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-gray-700">
+                Confirmar Senha
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {!isRegistering && (
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 text-gray-600">
+                <input type="checkbox" className="rounded" />
+                Lembrar-me
+              </label>
+              <a href="#" className="text-gray-600 hover:underline">
+                Esqueci minha senha
+              </a>
+            </div>
+          )}
 
           <Button
             type="submit"
@@ -194,18 +287,35 @@ export function LoginPage() {
               backgroundColor: isOwner ? '#f97316' : '#d97706',
             }}
           >
-            Entrar
+            {isRegistering ? 'Cadastrar' : 'Entrar'}
           </Button>
 
           <div className="text-center text-sm text-gray-600">
-            Não tem uma conta?{' '}
-            <a
-              href="#"
-              className="font-semibold hover:underline"
-              style={{ color: isOwner ? '#f97316' : '#d97706' }}
-            >
-              Cadastre-se
-            </a>
+            {isRegistering ? (
+              <>
+                Já tem uma conta?{' '}
+                <button
+                  type="button"
+                  onClick={() => setIsRegistering(false)}
+                  className="font-semibold hover:underline"
+                  style={{ color: isOwner ? '#f97316' : '#d97706' }}
+                >
+                  Faça login
+                </button>
+              </>
+            ) : (
+              <>
+                Não tem uma conta?{' '}
+                <button
+                  type="button"
+                  onClick={() => setIsRegistering(true)}
+                  className="font-semibold hover:underline"
+                  style={{ color: isOwner ? '#f97316' : '#d97706' }}
+                >
+                  Cadastre-se
+                </button>
+              </>
+            )}
           </div>
         </form>
       </Card>
