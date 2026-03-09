@@ -1,39 +1,34 @@
 import { useState, useEffect } from 'react';
+import { Toaster } from './components/ui/sonner';
 import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
 
 export default function App() {
-  const [user, setUser] = useState<any>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
-  // Persistence (optional but good)
   useEffect(() => {
-    const savedUser = localStorage.getItem('petconnect_user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        localStorage.removeItem('petconnect_user');
-      }
+    const token = localStorage.getItem('token');
+    if (token) {
+      setIsAuthenticated(true);
     }
   }, []);
 
-  const handleLoginSuccess = (userData: any) => {
-    setUser(userData);
-    localStorage.setItem('petconnect_user', JSON.stringify(userData));
+  const handleLogin = () => {
+    setIsAuthenticated(true);
   };
 
   const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('petconnect_user');
+    setIsAuthenticated(false);
   };
 
   return (
     <div className="size-full">
-      {!user ? (
-        <LoginPage onLoginSuccess={handleLoginSuccess} />
+      {isAuthenticated ? (
+        <Dashboard onLogout={handleLogout} />
       ) : (
-        <Dashboard user={user} onLogout={handleLogout} />
+        <LoginPage onLogin={handleLogin} />
       )}
+      <Toaster position="top-right" richColors />
     </div>
   );
 }
