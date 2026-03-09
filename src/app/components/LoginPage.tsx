@@ -1,30 +1,55 @@
 import { useState } from 'react';
-import { PawPrint, Home, Heart, Mail, Lock, ArrowLeft, HandHeart } from 'lucide-react';
+import { PawPrint, Mail, Lock, ArrowLeft, HandHeart } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
 import { Label } from './ui/label';
+import { toast } from 'sonner';
+import { authApi } from '../../lib/api';
+import { RegisterPage } from './RegisterPage';
 
+type ViewMode = 'selection' | 'login' | 'register';
 type UserType = 'owner' | 'caregiver' | null;
 
-export function LoginPage() {
+interface LoginPageProps {
+  onLogin: () => void;
+}
+
+export function LoginPage({ onLogin }: LoginPageProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('selection');
   const [userType, setUserType] = useState<UserType>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login:', { userType, email, password });
-    // Aqui seria integrado com o sistema de autenticação
+    setLoading(true);
+    try {
+      const response = await authApi.login({ email, password });
+      localStorage.setItem('token', response.token);
+      toast.success('Login realizado com sucesso!');
+      onLogin();
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao realizar login');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetSelection = () => {
+    setViewMode('selection');
     setUserType(null);
     setEmail('');
     setPassword('');
   };
 
-  if (userType === null) {
+  const handleUserTypeSelect = (type: UserType) => {
+    setUserType(type);
+    setViewMode('login');
+  };
+
+  if (viewMode === 'selection') {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-4">
         <div className="w-full max-w-4xl">
@@ -53,7 +78,7 @@ export function LoginPage() {
             {/* Tutor de Pet */}
             <Card
               className="p-8 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-orange-300 bg-white"
-              onClick={() => setUserType('owner')}
+              onClick={() => handleUserTypeSelect('owner')}
             >
               <div className="flex flex-col items-center text-center space-y-4">
                 <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center">
@@ -74,7 +99,7 @@ export function LoginPage() {
             {/* Cuidador */}
             <Card
               className="p-8 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-amber-300 bg-white"
-              onClick={() => setUserType('caregiver')}
+              onClick={() => handleUserTypeSelect('caregiver')}
             >
               <div className="flex flex-col items-center text-center space-y-4">
                 <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center">
@@ -94,6 +119,16 @@ export function LoginPage() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (viewMode === 'register' && userType) {
+    return (
+      <RegisterPage
+        userType={userType}
+        onBack={() => setViewMode('login')}
+        onSuccess={() => setViewMode('login')}
+      />
     );
   }
 
@@ -193,19 +228,21 @@ export function LoginPage() {
             style={{
               backgroundColor: isOwner ? '#f97316' : '#d97706',
             }}
+            disabled={loading}
           >
-            Entrar
+            {loading ? 'Entrando...' : 'Entrar'}
           </Button>
 
           <div className="text-center text-sm text-gray-600">
             Não tem uma conta?{' '}
-            <a
-              href="#"
+            <button
+              type="button"
+              onClick={() => setViewMode('register')}
               className="font-semibold hover:underline"
               style={{ color: isOwner ? '#f97316' : '#d97706' }}
             >
               Cadastre-se
-            </a>
+            </button>
           </div>
         </form>
       </Card>
