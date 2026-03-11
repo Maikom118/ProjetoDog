@@ -1,4 +1,4 @@
-const BASE_URL = 'http://iww8wkk8c4k4og4s0occg0so.72.60.138.8.sslip.io';
+const BASE_URL = 'https://pets-api.delo.dev.br/';
 
 export async function apiRequest<T>(
   path: string,
@@ -35,3 +35,4 @@ export const authApi = {
   registerDono: (data: any) => apiRequest('/api/Auth/register-dono', 'POST', data),
   registerCuidador: (data: any) => apiRequest('/api/Auth/register-cuidador', 'POST', data),
 };
+
