@@ -1,34 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Toaster } from './components/ui/sonner';
 import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
+import { CaregiversList } from './components/CaregiversList';
+
+type Page = 'login' | 'dashboard' | 'caregivers';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-
-  useEffect(() => {
+  const [currentPage, setCurrentPage] = useState<Page>(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
-    }
-  }, []);
+    return token ? 'dashboard' : 'login';
+  });
 
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-  };
+  const handleLogin = () => setCurrentPage('dashboard');
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
+    localStorage.removeItem('token');
+    setCurrentPage('login');
   };
 
   return (
-    <div className="size-full">
-      {isAuthenticated ? (
-        <Dashboard onLogout={handleLogout} />
-      ) : (
-        <LoginPage onLogin={handleLogin} />
+    <>
+      {currentPage === 'login' && <LoginPage onLogin={handleLogin} />}
+      {currentPage === 'dashboard' && (
+        <Dashboard
+          onLogout={handleLogout}
+          onNavigate={(page: string) => setCurrentPage(page as Page)}
+        />
+      )}
+      {currentPage === 'caregivers' && (
+        <CaregiversList onBack={() => setCurrentPage('dashboard')} />
       )}
       <Toaster position="top-right" richColors />
-    </div>
+    </>
   );
 }

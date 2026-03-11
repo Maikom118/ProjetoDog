@@ -1,4 +1,4 @@
-const BASE_URL = 'https://pets-api.delo.dev.br/';
+const BASE_URL = 'https://pets-api.delo.dev.br';
 
 export async function apiRequest<T>(
   path: string,
@@ -36,3 +36,29 @@ export const authApi = {
   registerCuidador: (data: any) => apiRequest('/api/Auth/register-cuidador', 'POST', data),
 };
 
+// API de Cuidadores
+export interface CuidadorEndereco {
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+}
+
+export interface Cuidador {
+  id: string;
+  nome: string;
+  valorDiaria: number;
+  endereco: CuidadorEndereco;
+  telefone: string;
+  email: string;
+  especialidades: string[];
+  bio: string;
+}
+
+export const cuidadoresApi = {
+  getAll: () => apiRequest<Cuidador[]>('/api/Cuidadores', 'GET'),
+  getById: (id: string) => apiRequest<Cuidador>(`/api/Cuidadores/${id}`, 'GET'),
+};

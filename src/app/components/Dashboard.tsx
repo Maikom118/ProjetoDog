@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   PawPrint, 
   LayoutDashboard, 
@@ -9,7 +9,8 @@ import {
   User,
   Search,
   PlusCircle,
-  Bell
+  Bell,
+  Users
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -18,9 +19,10 @@ import { toast } from 'sonner';
 
 interface DashboardProps {
   onLogout: () => void;
+  onNavigate: (page: string) => void;
 }
 
-export function Dashboard({ onLogout }: DashboardProps) {
+export function Dashboard({ onLogout, onNavigate }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const handleLogout = () => {
@@ -124,6 +126,34 @@ export function Dashboard({ onLogout }: DashboardProps) {
                   <p className="text-3xl font-bold text-gray-800 mt-2">{stat.value}</p>
                 </Card>
               ))}
+            </div>
+
+            {/* Encontrar Cuidadores - Card Destacado */}
+            <div
+              onClick={() => onNavigate('caregivers')}
+              className="block cursor-pointer"
+            >
+              <Card className="p-8 border-none shadow-md hover:shadow-xl transition-all bg-gradient-to-r from-orange-500 via-orange-600 to-amber-500 text-white transform hover:scale-[1.02] duration-300">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                      <Users className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold mb-2">Encontrar Cuidadores</h3>
+                      <p className="text-orange-50 text-sm max-w-lg">
+                        Navegue por nossa lista de cuidadores de confiança e encontre o perfeito para seu pet
+                      </p>
+                    </div>
+                  </div>
+                  <div className="hidden md:flex items-center gap-2 px-6 py-3 bg-white text-orange-600 rounded-lg font-bold shadow-lg">
+                    Ver Cuidadores
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </Card>
             </div>
 
             {/* Content Sections */}

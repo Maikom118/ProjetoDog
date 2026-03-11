@@ -18,6 +18,7 @@ interface RegisterPageProps {
 
 export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps) {
   const [loading, setLoading] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
   const isOwner = userType === 'owner';
   const primaryColor = isOwner ? 'orange' : 'amber';
 
@@ -60,8 +61,44 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
     } else {
       setFormData((prev) => ({
         ...prev,
-        [name]: name === 'valorDiaria' ? parseFloat(value) : value,
+        [name]: name === 'valorDiaria' ? Math.max(0, parseFloat(value) || 0) : value,
       }));
+    }
+  };
+
+  const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      endereco: { ...prev.endereco, cep: rawValue },
+    }));
+
+    const digits = rawValue.replace(/\D/g, '');
+    if (digits.length === 8) {
+      setCepLoading(true);
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          setFormData((prev) => ({
+            ...prev,
+            endereco: {
+              ...prev.endereco,
+              logradouro: data.logradouro || '',
+              bairro: data.bairro || '',
+              cidade: data.localidade || '',
+              uf: data.uf || '',
+              complemento: data.complemento || prev.endereco.complemento,
+            },
+          }));
+        } else {
+          toast.error('CEP não encontrado.');
+        }
+      } catch {
+        toast.error('Erro ao buscar CEP.');
+      } finally {
+        setCepLoading(false);
+      }
     }
   };
 
@@ -156,7 +193,8 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="endereco.cep">CEP</Label>
-                  <Input id="endereco.cep" name="endereco.cep" value={formData.endereco.cep} onChange={handleInputChange} required />
+                  <Input id="endereco.cep" name="endereco.cep" value={formData.endereco.cep} onChange={handleCepChange} placeholder="00000-000" required />
+                  {cepLoading && <p className="text-xs text-orange-500">Buscando endereço...</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="endereco.uf">UF</Label>
@@ -207,7 +245,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                     <Label htmlFor="valorDiaria">Valor da Diária (R$)</Label>
                     <div className="relative">
                       <CreditCard className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                      <Input id="valorDiaria" name="valorDiaria" type="number" step="0.01" value={formData.valorDiaria} onChange={handleInputChange} className="pl-10" required />
+                      <Input id="valorDiaria" name="valorDiaria" type="number" step="0.01" min="0" value={formData.valorDiaria} onChange={handleInputChange} className="pl-10" required />
                     </div>
                   </div>
                   <div className="space-y-2">
