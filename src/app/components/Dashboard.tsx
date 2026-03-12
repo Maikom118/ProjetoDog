@@ -20,10 +20,13 @@ import { toast } from 'sonner';
 interface DashboardProps {
   onLogout: () => void;
   onNavigate: (page: string) => void;
+  userRole?: string | null;
 }
 
-export function Dashboard({ onLogout, onNavigate }: DashboardProps) {
+export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  const isCaregiver = userRole?.toLowerCase() === 'cuidador' || userRole?.toLowerCase() === 'caregiver';
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -129,6 +132,7 @@ export function Dashboard({ onLogout, onNavigate }: DashboardProps) {
             </div>
 
             {/* Encontrar Cuidadores - Card Destacado */}
+            {!isCaregiver && (
             <div
               onClick={() => onNavigate('caregivers')}
               className="block cursor-pointer"
@@ -155,6 +159,7 @@ export function Dashboard({ onLogout, onNavigate }: DashboardProps) {
                 </div>
               </Card>
             </div>
+            )}
 
             {/* Content Sections */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

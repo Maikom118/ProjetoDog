@@ -25,6 +25,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
   const [formData, setFormData] = useState({
     email: '',
     senha: '',
+    confirmarSenha: '',
     nome: '',
     cpf: '',
     dataNascimento: '',
@@ -46,6 +47,60 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
     valorDiaria: 0,
     especialidades: [] as string[],
   });
+
+  const [cpfError, setCpfError] = useState('');
+  const [senhaError, setSenhaError] = useState('');
+
+  const formatCpf = (value: string): string => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  };
+
+  const validateCpf = (cpf: string): boolean => {
+    const digits = cpf.replace(/\D/g, '');
+    if (digits.length !== 11) return false;
+    if (/^(\d)\1{10}$/.test(digits)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(digits[i]) * (10 - i);
+    let remainder = (sum * 10) % 11;
+    if (remainder === 10) remainder = 0;
+    if (remainder !== parseInt(digits[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(digits[i]) * (11 - i);
+    remainder = (sum * 10) % 11;
+    if (remainder === 10) remainder = 0;
+    return remainder === parseInt(digits[10]);
+  };
+
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCpf(e.target.value);
+    setFormData((prev) => ({ ...prev, cpf: formatted }));
+    const digits = formatted.replace(/\D/g, '');
+    if (digits.length === 11) {
+      setCpfError(validateCpf(formatted) ? '' : 'CPF inválido');
+    } else {
+      setCpfError('');
+    }
+  };
+
+  const handleConfirmarSenhaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData((prev) => ({ ...prev, confirmarSenha: value }));
+    setSenhaError(value && value !== formData.senha ? 'As senhas não coincidem' : '');
+  };
+
+  const handleSenhaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData((prev) => ({ ...prev, senha: value }));
+    if (formData.confirmarSenha && value !== formData.confirmarSenha) {
+      setSenhaError('As senhas não coincidem');
+    } else {
+      setSenhaError('');
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -104,13 +159,24 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateCpf(formData.cpf)) {
+      toast.error('CPF inválido. Verifique e tente novamente.');
+      return;
+    }
+
+    if (formData.senha !== formData.confirmarSenha) {
+      toast.error('As senhas não coincidem.');
+      return;
+    }
+
     setLoading(true);
     try {
       if (isOwner) {
-        const { bio, valorDiaria, especialidades, ...donoData } = formData;
+        const { bio, valorDiaria, especialidades, confirmarSenha, ...donoData } = formData;
         await authApi.registerDono(donoData);
       } else {
-        const { contatoEmergenciaNome, contatoEmergenciaTelefone, ...cuidadorData } = formData;
+        const { contatoEmergenciaNome, contatoEmergenciaTelefone, confirmarSenha, ...cuidadorData } = formData;
         await authApi.registerCuidador(cuidadorData);
       }
       toast.success('Cadastro realizado com sucesso!');
@@ -165,13 +231,22 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                 <Label htmlFor="senha">Senha</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="senha" name="senha" type="password" value={formData.senha} onChange={handleInputChange} className="pl-10" required />
+                  <Input id="senha" name="senha" type="password" value={formData.senha} onChange={handleSenhaChange} className="pl-10" required />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmarSenha">Confirmar Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                  <Input id="confirmarSenha" name="confirmarSenha" type="password" value={formData.confirmarSenha} onChange={handleConfirmarSenhaChange} className="pl-10" required />
+                </div>
+                {senhaError && <p className="text-xs text-red-500">{senhaError}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="cpf">CPF</Label>
-                  <Input id="cpf" name="cpf" value={formData.cpf} onChange={handleInputChange} placeholder="000.000.000-00" required />
+                  <Input id="cpf" name="cpf" value={formData.cpf} onChange={handleCpfChange} placeholder="000.000.000-00" maxLength={14} required />
+                  {cpfError && <p className="text-xs text-red-500">{cpfError}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dataNascimento">Nascimento</Label>
