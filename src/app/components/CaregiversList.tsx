@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { cuidadoresApi, Cuidador } from '../../lib/api';
-import { MapPin, DollarSign, Loader2, Phone, Mail, Award, X, MessageCircle, ArrowLeft } from 'lucide-react';
+import { MapPin, DollarSign, Loader2, Phone, Mail, Award, X, MessageCircle, ArrowLeft, Search, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -19,6 +19,10 @@ export function CaregiversList({ onBack }: CaregiversListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCuidador, setSelectedCuidador] = useState<Cuidador | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCity, setFilterCity] = useState('');
+  const [filterMaxPrice, setFilterMaxPrice] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadCuidadores();
@@ -37,6 +41,34 @@ export function CaregiversList({ onBack }: CaregiversListProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Filtragem
+  const filteredCuidadores = cuidadores.filter((c) => {
+    // Busca por nome
+    if (searchTerm && !c.nome?.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false;
+    }
+    // Filtro por cidade
+    if (filterCity && !c.endereco?.cidade?.toLowerCase().includes(filterCity.toLowerCase())) {
+      return false;
+    }
+    // Filtro por preço máximo
+    if (filterMaxPrice && c.valorDiaria != null && c.valorDiaria > Number(filterMaxPrice)) {
+      return false;
+    }
+    return true;
+  });
+
+  // Lista de cidades únicas para referência
+  const uniqueCities = [...new Set(cuidadores.map((c) => c.endereco?.cidade).filter(Boolean))] as string[];
+
+  const hasActiveFilters = searchTerm || filterCity || filterMaxPrice;
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterCity('');
+    setFilterMaxPrice('');
   };
 
   if (loading) {
@@ -86,19 +118,111 @@ export function CaregiversList({ onBack }: CaregiversListProps) {
           <p className="text-gray-600">
             Encontre o cuidador perfeito para seu pet
           </p>
-          <p className="text-sm text-gray-500 mt-2">
-            Total: {cuidadores.length} cuidador(es) encontrado(s)
-          </p>
         </div>
 
+        {/* Barra de Busca e Filtros */}
+        <div className="mb-6 space-y-4">
+          {/* Busca por nome */}
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar cuidador por nome..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-colors"
+              />
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-5 py-3 rounded-lg border transition-colors ${
+                showFilters || hasActiveFilters
+                  ? 'bg-orange-50 border-orange-300 text-orange-600'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <SlidersHorizontal className="w-5 h-5" />
+              <span className="hidden sm:inline">Filtros</span>
+              {hasActiveFilters && (
+                <span className="w-2 h-2 bg-orange-500 rounded-full" />
+              )}
+            </button>
+          </div>
+
+          {/* Painel de Filtros */}
+          {showFilters && (
+            <div className="bg-white border border-gray-200 rounded-lg p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1.5">Cidade</label>
+                <select
+                  value={filterCity}
+                  onChange={(e) => setFilterCity(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-colors"
+                >
+                  <option value="">Todas as cidades</option>
+                  {uniqueCities.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1.5">Preço máximo (diária)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Ex: 100"
+                    value={filterMaxPrice}
+                    onChange={(e) => setFilterMaxPrice(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-colors"
+                  />
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <div className="sm:col-span-2">
+                  <button
+                    onClick={clearFilters}
+                    className="text-sm text-orange-600 hover:text-orange-700 hover:underline transition-colors"
+                  >
+                    Limpar todos os filtros
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Resultado da busca */}
+        <p className="text-sm text-gray-500 mb-4">
+          {hasActiveFilters
+            ? `${filteredCuidadores.length} cuidador(es) encontrado(s) com os filtros aplicados`
+            : `Total: ${cuidadores.length} cuidador(es) encontrado(s)`}
+        </p>
+
         {/* Lista de Cuidadores */}
-        {cuidadores.length === 0 ? (
+        {filteredCuidadores.length === 0 ? (
           <div className="bg-white p-12 rounded-lg shadow-sm text-center">
-            <p className="text-gray-500">Nenhum cuidador encontrado</p>
+            <p className="text-gray-500">
+              {hasActiveFilters
+                ? 'Nenhum cuidador encontrado com os filtros aplicados'
+                : 'Nenhum cuidador encontrado'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="mt-3 text-orange-600 hover:underline text-sm"
+              >
+                Limpar filtros
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {cuidadores.map((cuidador) => (
+            {filteredCuidadores.map((cuidador) => (
               <div
                 key={cuidador.id}
                 className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all p-6 flex flex-col"
