@@ -212,16 +212,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center gap-2 text-gray-600">
-              <input type="checkbox" className="rounded" />
-              Lembrar-me
-            </label>
-            <a href="#" className="text-gray-600 hover:underline">
-              Esqueci minha senha
-            </a>
-          </div>
-
           <Button
             type="submit"
             className="w-full text-white"
