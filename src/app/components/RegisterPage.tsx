@@ -324,16 +324,39 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="especialidades">Especialidades (separadas por vírgula)</Label>
-                    <div className="relative">
-                      <ClipboardList className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                      <Input
-                        id="especialidades"
-                        name="especialidades"
-                        placeholder="Cachorros, Gatos, Idosos..."
-                        onChange={(e) => setFormData(prev => ({ ...prev, especialidades: e.target.value.split(',').map(s => s.trim()) }))}
-                        className="pl-10"
-                      />
+                    <Label>Especialidades</Label>
+                    <div className="flex flex-col gap-2 pt-1">
+                      {[
+                        { value: 'Cachorro', label: '🐶 Cachorro' },
+                        { value: 'Gato',     label: '🐱 Gato'     },
+                      ].map(({ value, label }) => {
+                        const checked = formData.especialidades.includes(value);
+                        return (
+                          <label
+                            key={value}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all select-none ${
+                              checked
+                                ? 'border-amber-400 bg-amber-50 text-amber-800'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-amber-200 hover:bg-amber-50/40'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="accent-amber-500 w-4 h-4"
+                              checked={checked}
+                              onChange={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  especialidades: checked
+                                    ? prev.especialidades.filter((s) => s !== value)
+                                    : [...prev.especialidades, value],
+                                }))
+                              }
+                            />
+                            <span className="font-medium">{label}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
