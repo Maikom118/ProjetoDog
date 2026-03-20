@@ -22,11 +22,38 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Decodifica o payload do JWT sem biblioteca externa
+  const decodeTokenRole = (token: string): string | null => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      // O backend pode usar diferentes claim names para role
+      const role: string =
+        payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ??
+        payload.role ??
+        payload.Role ??
+        '';
+      return role.toLowerCase();
+    } catch {
+      return null;
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const response = await authApi.login({ email, password });
+
+      // Valida se a role do token bate com o tipo de conta escolhido
+      const tokenRole = decodeTokenRole(response.token);
+      const isCaregiverRole = tokenRole === 'cuidador' || tokenRole === 'caregiver';
+      const isOwnerRole = tokenRole === 'dono' || tokenRole === 'owner' || tokenRole === 'tutor';
+
+      if ((userType === 'owner' && isCaregiverRole) || (userType === 'caregiver' && isOwnerRole)) {
+        toast.error('Credenciais inválidas.');
+        return;
+      }
+
       localStorage.setItem('token', response.token);
       toast.success('Login realizado com sucesso!');
       onLogin();
