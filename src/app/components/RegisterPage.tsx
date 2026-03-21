@@ -21,6 +21,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
   const [cepLoading, setCepLoading] = useState(false);
   const isOwner = userType === 'owner';
   const primaryColor = isOwner ? 'orange' : 'amber';
+  const [enderecoTravado, setEnderecoTravado] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -129,6 +130,9 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
     }));
 
     const digits = rawValue.replace(/\D/g, '');
+    if (digits.length < 8) {
+  setEnderecoTravado(false);
+}
     if (digits.length === 8) {
       setCepLoading(true);
       try {
@@ -146,6 +150,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
               complemento: data.complemento || prev.endereco.complemento,
             },
           }));
+           setEnderecoTravado(true);
         } else {
           toast.error('CEP não encontrado.');
         }
@@ -273,26 +278,26 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="endereco.uf">UF</Label>
-                  <Input id="endereco.uf" name="endereco.uf" value={formData.endereco.uf} onChange={handleInputChange} maxLength={2} required />
+                  <Input id="endereco.uf" name="endereco.uf" value={formData.endereco.uf} onChange={handleInputChange} disabled={enderecoTravado} maxLength={2} required />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endereco.logradouro">Logradouro</Label>
-                <Input id="endereco.logradouro" name="endereco.logradouro" value={formData.endereco.logradouro} onChange={handleInputChange} required />
+                <Input id="endereco.logradouro" name="endereco.logradouro" value={formData.endereco.logradouro} onChange={handleInputChange} required disabled={enderecoTravado} />
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="endereco.numero">Nº</Label>
-                  <Input id="endereco.numero" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} required />
+                  <Input id="endereco.numero" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} required  />
                 </div>
                 <div className="col-span-2 space-y-2">
                   <Label htmlFor="endereco.bairro">Bairro</Label>
-                  <Input id="endereco.bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} required />
+                  <Input id="endereco.bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} required disabled={enderecoTravado} />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endereco.cidade">Cidade</Label>
-                <Input id="endereco.cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} required />
+                <Input id="endereco.cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} required disabled={enderecoTravado}/>
               </div>
             </div>
           </div>
