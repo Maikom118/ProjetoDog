@@ -123,7 +123,8 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
   };
 
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value;
+    const rawValue = e.target.value.replace(/\D/g, '');
+
     setFormData((prev) => ({
       ...prev,
       endereco: { ...prev.endereco, cep: rawValue },
@@ -273,7 +274,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="endereco.cep">CEP</Label>
-                  <Input id="endereco.cep" name="endereco.cep" value={formData.endereco.cep} onChange={handleCepChange} placeholder="00000-000" required />
+                  <Input id="endereco.cep" name="endereco.cep" value={formData.endereco.cep} onChange={handleCepChange} placeholder="00000-000" required  maxLength={8}/>
                   {cepLoading && <p className="text-xs text-orange-500">Buscando endereço...</p>}
                 </div>
                 <div className="space-y-2">
