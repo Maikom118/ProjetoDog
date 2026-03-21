@@ -944,7 +944,12 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
               <Bell className="w-5 h-5 text-gray-600" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
             </Button>
-            <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => handleTabChange('profile')}
+              className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-gray-100 transition-colors"
+              title="Ir para o perfil"
+            >
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-semibold text-gray-800 leading-tight">{fullName || 'Usuário'}</p>
                 <p className="text-xs text-gray-400 leading-tight capitalize">{userRole ?? 'Membro'}</p>
@@ -952,7 +957,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm border-2 border-orange-200 shadow-sm">
                 {initials}
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
