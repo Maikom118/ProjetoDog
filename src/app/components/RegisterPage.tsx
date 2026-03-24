@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PawPrint, Mail, Lock, ArrowLeft, HandHeart, User, Phone, MapPin, Calendar, CreditCard, ClipboardList } from 'lucide-react';
+import { PawPrint, Mail, Lock, ArrowLeft, HandHeart, User, Phone, MapPin, Calendar, CreditCard, ClipboardList, Eye, EyeOff } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
@@ -51,6 +51,8 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
 
   const [cpfError, setCpfError] = useState('');
   const [senhaError, setSenhaError] = useState('');
+  const [showSenha, setShowSenha] = useState(false);
+  const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
 
   const formatCpf = (value: string): string => {
     const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -237,14 +239,30 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                 <Label htmlFor="senha">Senha</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="senha" name="senha" type="password" value={formData.senha} onChange={handleSenhaChange} className="pl-10" required />
+                  <Input id="senha" name="senha" type={showSenha ? 'text' : 'password'} value={formData.senha} onChange={handleSenhaChange} className="pl-10 pr-10" required />
+                  <button
+                    type="button"
+                    onClick={() => setShowSenha((prev) => !prev)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmarSenha">Confirmar Senha</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="confirmarSenha" name="confirmarSenha" type="password" value={formData.confirmarSenha} onChange={handleConfirmarSenhaChange} className="pl-10" required />
+                  <Input id="confirmarSenha" name="confirmarSenha" type={showConfirmarSenha ? 'text' : 'password'} value={formData.confirmarSenha} onChange={handleConfirmarSenhaChange} className="pl-10 pr-10" required />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmarSenha((prev) => !prev)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label={showConfirmarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showConfirmarSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
                 {senhaError && <p className="text-xs text-red-500">{senhaError}</p>}
               </div>

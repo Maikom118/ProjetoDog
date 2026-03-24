@@ -47,6 +47,16 @@ interface FlowState {
   specialCareDesc?: string;
 }
 
+interface PersistedChatState {
+  messages: ChatMessage[];
+  input: string;
+  flow: FlowState | null;
+  postAction: 'find_caregiver' | null;
+}
+
+const CHAT_STORAGE_PREFIX = 'petconnect-chat-history';
+const CHAT_STORAGE_VERSION = 'v2';
+
 function getUserInfo(): { firstName: string; fullName: string; initials: string } {
   const token = localStorage.getItem('token');
   if (!token) return { firstName: '', fullName: '', initials: 'U' };
@@ -74,6 +84,79 @@ function getUserInfo(): { firstName: string; fullName: string; initials: string 
 
 function getUserFirstName(): string {
   return getUserInfo().firstName;
+}
+
+function getLegacyChatStorageKey(): string {
+  const token = localStorage.getItem('token');
+  if (!token) return `${CHAT_STORAGE_PREFIX}:guest`;
+
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const userId =
+      payload.sub ||
+      payload.userId ||
+      payload.user_id ||
+      payload.email ||
+      payload.unique_name ||
+      payload.name;
+
+    return `${CHAT_STORAGE_PREFIX}:${String(userId ?? 'guest')}`;
+  } catch {
+    return `${CHAT_STORAGE_PREFIX}:guest`;
+  }
+}
+
+function getChatStorageKey(): string {
+  return `${getLegacyChatStorageKey()}:${CHAT_STORAGE_VERSION}`;
+}
+
+function loadPersistedChatState(): PersistedChatState | null {
+  try {
+    const legacyKey = getLegacyChatStorageKey();
+    const legacyRaw = localStorage.getItem(legacyKey);
+    if (legacyRaw) {
+      localStorage.removeItem(legacyKey);
+    }
+
+    const raw = localStorage.getItem(getChatStorageKey());
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as PersistedChatState;
+    if (!Array.isArray(parsed.messages)) return null;
+    const hasLegacyAssistantName = parsed.messages.some(
+      (message) => typeof message.text === 'string' && /chat inteligente/i.test(message.text)
+    );
+    if (hasLegacyAssistantName) {
+      localStorage.removeItem(getChatStorageKey());
+      return null;
+    }
+
+    return {
+      messages: parsed.messages.length ? parsed.messages : [makeWelcomeMessage()],
+      input: typeof parsed.input === 'string' ? parsed.input : '',
+      flow: parsed.flow ?? null,
+      postAction: parsed.postAction ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistChatState(state: PersistedChatState) {
+  try {
+    localStorage.setItem(getChatStorageKey(), JSON.stringify(state));
+  } catch {
+    // Ignore storage failures to avoid breaking chat usage.
+  }
+}
+
+function clearPersistedChatState() {
+  try {
+    localStorage.removeItem(getLegacyChatStorageKey());
+    localStorage.removeItem(getChatStorageKey());
+  } catch {
+    // Ignore storage cleanup failures.
+  }
 }
 
 const HOW_IT_WORKS_INTRO =
@@ -200,17 +283,17 @@ function makeWelcomeMessage(): ChatMessage {
   const name = firstName ? `**${firstName}**` : '';
   const WELCOME_VARIATIONS = [
     name
-      ? `Olá, ${name}! 🐾 Sou o **Chat Inteligente**, seu assistente do PetConnect. Clique em um dos botões abaixo para começar 👇`
-      : 'Olá! 🐾 Sou o **Chat Inteligente**, seu assistente do PetConnect. Clique em um dos botões abaixo para começar 👇',
+      ? `Olá, ${name}! 🐾 Sou o **Toby**, seu assistente do PetConnect. Clique em um dos botões abaixo para começar 👇`
+      : 'Olá! 🐾 Sou o **Toby**, seu assistente do PetConnect. Clique em um dos botões abaixo para começar 👇',
     name
-      ? `Oi, ${name}! 🐾 Que bom ter você por aqui! Sou o **Chat Inteligente** e estou pronto pra te ajudar. O que você precisa hoje? 👇`
-      : 'Oi! 🐾 Que bom ter você por aqui! Sou o **Chat Inteligente** e estou pronto pra te ajudar. O que você precisa hoje? 👇',
+      ? `Oi, ${name}! 🐾 Que bom ter você por aqui! Sou o **Toby** e estou pronto pra te ajudar. O que você precisa hoje? 👇`
+      : 'Oi! 🐾 Que bom ter você por aqui! Sou o **Toby** e estou pronto pra te ajudar. O que você precisa hoje? 👇',
     name
-      ? `Olá, ${name}! 🐾 Bem-vindo ao **PetConnect**! Sou o Chat Inteligente e estou aqui pra facilitar sua vida. Como posso ajudar? 👇`
-      : 'Olá! 🐾 Bem-vindo ao **PetConnect**! Sou o Chat Inteligente e estou aqui pra facilitar sua vida. Como posso ajudar? 👇',
+      ? `Olá, ${name}! 🐾 Bem-vindo ao **PetConnect**! Sou o Toby e estou aqui pra facilitar sua vida. Como posso ajudar? 👇`
+      : 'Olá! 🐾 Bem-vindo ao **PetConnect**! Sou o Toby e estou aqui pra facilitar sua vida. Como posso ajudar? 👇',
     name
-      ? `Ei, ${name}! 🐾 Sou o **Chat Inteligente**, seu assistente virtual do PetConnect. Me diz o que você precisa! 👇`
-      : 'Ei! 🐾 Sou o **Chat Inteligente**, seu assistente virtual do PetConnect. Me diz o que você precisa! 👇',
+      ? `Ei, ${name}! 🐾 Sou o **Toby**, seu assistente virtual do PetConnect. Me diz o que você precisa! 👇`
+      : 'Ei! 🐾 Sou o **Toby**, seu assistente virtual do PetConnect. Me diz o que você precisa! 👇',
   ];
   return {
     id: 1,
@@ -228,11 +311,12 @@ const QUICK_REPLIES = [
 ];
 
 function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: (page: string, filters?: CaregiverFilters) => void }) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [makeWelcomeMessage()]);
-  const [input, setInput] = useState('');
+  const persistedStateRef = useRef<PersistedChatState | null>(loadPersistedChatState());
+  const [messages, setMessages] = useState<ChatMessage[]>(() => persistedStateRef.current?.messages ?? [makeWelcomeMessage()]);
+  const [input, setInput] = useState(() => persistedStateRef.current?.input ?? '');
   const [typing, setTyping] = useState(false);
-  const [flow, setFlow] = useState<FlowState | null>(null);
-  const [postAction, setPostAction] = useState<'find_caregiver' | null>(null);
+  const [flow, setFlow] = useState<FlowState | null>(() => persistedStateRef.current?.flow ?? null);
+  const [postAction, setPostAction] = useState<'find_caregiver' | null>(() => persistedStateRef.current?.postAction ?? null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -243,6 +327,10 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
   useEffect(() => {
     if (flow && INPUT_STEPS.includes(flow.step)) inputRef.current?.focus();
   }, [flow]);
+
+  useEffect(() => {
+    persistChatState({ messages, input, flow, postAction });
+  }, [messages, input, flow, postAction]);
 
   const addBotMessage = (text: string, delay = 900) => {
     setTyping(true);
@@ -449,7 +537,7 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
             <MessageCircle className="w-3 h-3 text-white absolute -bottom-0.5 -right-0.5 drop-shadow" />
           </div>
           <div>
-            <p className="text-white font-semibold text-sm leading-none">Chat Inteligente</p>
+            <p className="text-white font-semibold text-sm leading-none">Toby</p>
             <span className="flex items-center gap-1 mt-0.5">
               <span className="w-1.5 h-1.5 bg-green-300 rounded-full inline-block"></span>
               <span className="text-orange-100 text-xs">Online</span>
@@ -728,6 +816,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   const isCaregiver = userRole?.toLowerCase() === 'cuidador' || userRole?.toLowerCase() === 'caregiver';
 
   const handleLogout = () => {
+    clearPersistedChatState();
     localStorage.removeItem('token');
     toast.info('Sessão encerrada');
     onLogout();
@@ -855,7 +944,12 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
               <Bell className="w-5 h-5 text-gray-600" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
             </Button>
-            <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => handleTabChange('profile')}
+              className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-gray-100 transition-colors"
+              title="Ir para o perfil"
+            >
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-semibold text-gray-800 leading-tight">{fullName || 'Usuário'}</p>
                 <p className="text-xs text-gray-400 leading-tight capitalize">{userRole ?? 'Membro'}</p>
@@ -863,7 +957,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm border-2 border-orange-200 shadow-sm">
                 {initials}
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
@@ -981,8 +1075,8 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
       {!isCaregiver && (
         <>
           {chatOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-              <div className="w-[720px] h-[88vh] bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-bottom-6 duration-200">
+            <div className="fixed inset-0 z-50 pointer-events-none sm:bottom-24 sm:left-6 sm:right-auto sm:top-auto">
+              <div className="h-full w-full bg-white border border-gray-100 flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-bottom-6 duration-200 sm:h-[min(68vh,640px)] sm:max-w-[420px] sm:rounded-2xl sm:shadow-2xl">
                 <ChatWidget onClose={() => setChatOpen(false)} onNavigate={onNavigate} />
               </div>
             </div>
@@ -990,23 +1084,15 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
 
           {/* FAB button — left, above sidebar bottom */}
           <div className="fixed bottom-20 left-6 z-50">
-            <button
-              onClick={() => setChatOpen((prev) => !prev)}
-              className={`relative w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 ${
-                chatOpen
-                  ? 'bg-gray-700 hover:bg-gray-800'
-                  : 'bg-gradient-to-br from-orange-500 to-amber-500 hover:scale-110 hover:shadow-orange-200 hover:shadow-xl'
-              }`}
-            >
-              {chatOpen ? (
-                <X className="w-6 h-6 text-white" />
-              ) : (
-                <>
-                  <MessageCircle className="w-6 h-6 text-white" />
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white" />
-                </>
-              )}
-            </button>
+            {!chatOpen && (
+              <button
+                onClick={() => setChatOpen(true)}
+                className="relative w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 bg-gradient-to-br from-orange-500 to-amber-500 hover:scale-110 hover:shadow-orange-200 hover:shadow-xl"
+              >
+                <MessageCircle className="w-6 h-6 text-white" />
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white" />
+              </button>
+            )}
           </div>
         </>
       )}

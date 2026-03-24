@@ -248,7 +248,7 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
           <div className="flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-200 rounded-xl text-sm text-orange-700">
             <span className="text-xl">🏆</span>
             <span>
-              Resultados personalizados para <strong>{petName ?? 'seu pet'}</strong> — ordenados por compatibilidade pelo Chat Inteligente.
+              Resultados personalizados para <strong>{petName ?? 'seu pet'}</strong> — ordenados por compatibilidade pelo Toby.
               O primeiro da lista é o <strong>Best Match</strong> e a distância de cada cuidador está indicada no cartão!
             </span>
           </div>
