@@ -3,6 +3,18 @@ import { Toaster } from './components/ui/sonner';
 import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
 import { CaregiversList } from './components/CaregiversList';
+import { CaregiverProfile } from './components/CaregiverProfile';
+import { Cuidador } from '../lib/api';
+
+export interface CaregiverFilters {
+  city?: string;
+  maxPrice?: string;
+  specialty?: string;
+  name?: string;
+  bestMatchId?: string;
+  preloadedCuidadores?: Cuidador[]; // lista pré-carregada pelo endpoint de match
+  petName?: string; // nome do pet para exibir banner
+}
 
 function getUserRole(): string | null {
   const token = localStorage.getItem('token');
@@ -15,7 +27,7 @@ function getUserRole(): string | null {
   }
 }
 
-type Page = 'login' | 'dashboard' | 'caregivers';
+type Page = 'login' | 'dashboard' | 'caregivers' | 'caregiver-profile';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>(() => {
@@ -23,6 +35,8 @@ export default function App() {
     return token ? 'dashboard' : 'login';
   });
   const [userRole, setUserRole] = useState<string | null>(() => getUserRole());
+  const [selectedCaregiver, setSelectedCaregiver] = useState<Cuidador | null>(null);
+  const [caregiverFilters, setCaregiverFilters] = useState<CaregiverFilters>({});
 
   const handleLogin = () => {
     setUserRole(getUserRole());
@@ -35,18 +49,38 @@ export default function App() {
     setCurrentPage('login');
   };
 
+  const handleNavigate = (page: string, filters?: CaregiverFilters) => {
+    if (filters) setCaregiverFilters(filters);
+    setCurrentPage(page as Page);
+  };
+
+  const handleViewCaregiverProfile = (cuidador: Cuidador) => {
+    setSelectedCaregiver(cuidador);
+    setCurrentPage('caregiver-profile');
+  };
+
   return (
     <>
       {currentPage === 'login' && <LoginPage onLogin={handleLogin} />}
       {currentPage === 'dashboard' && (
         <Dashboard
           onLogout={handleLogout}
-          onNavigate={(page: string) => setCurrentPage(page as Page)}
+          onNavigate={handleNavigate}
           userRole={userRole}
         />
       )}
       {currentPage === 'caregivers' && (
-        <CaregiversList onBack={() => setCurrentPage('dashboard')} />
+        <CaregiversList
+          onBack={() => { setCaregiverFilters({}); setCurrentPage('dashboard'); }}
+          onViewProfile={handleViewCaregiverProfile}
+          initialFilters={caregiverFilters}
+        />
+      )}
+      {currentPage === 'caregiver-profile' && selectedCaregiver && (
+        <CaregiverProfile
+          cuidador={selectedCaregiver}
+          onBack={() => setCurrentPage('caregivers')}
+        />
       )}
       <Toaster position="top-right" richColors />
     </>

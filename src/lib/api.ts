@@ -19,7 +19,13 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || response.statusText || 'Erro na requisição');
+    const message =
+      errorData.message ||
+      errorData.title ||
+      errorData.error ||
+      (typeof errorData === 'string' ? errorData : null) ||
+      `HTTP ${response.status}`;
+    throw new Error(message);
   }
 
   // Handle empty response for 204 No Content
@@ -56,9 +62,23 @@ export interface Cuidador {
   email: string;
   especialidades: string[];
   bio: string;
+  distanciaKm?: number;
 }
 
 export const cuidadoresApi = {
   getAll: () => apiRequest<Cuidador[]>('/api/Cuidadores', 'GET'),
   getById: (id: string) => apiRequest<Cuidador>(`/api/Cuidadores/${id}`, 'GET'),
+};
+
+export interface MatchRequest {
+  nomePet: string;
+  especie: string;
+  porte: string;
+  cuidadosEspeciais: string;
+  descricao: string;
+}
+
+export const matchApi = {
+  encontrarCuidador: (data: MatchRequest) =>
+    apiRequest<Cuidador[]>('/api/Match/encontrar-cuidador', 'POST', data),
 };

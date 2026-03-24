@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PawPrint, Mail, Lock, ArrowLeft, HandHeart, User, Phone, MapPin, Calendar, CreditCard, ClipboardList } from 'lucide-react';
+import { PawPrint, Mail, Lock, ArrowLeft, HandHeart, User, Phone, MapPin, Calendar, CreditCard, ClipboardList, Eye, EyeOff } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
@@ -21,6 +21,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
   const [cepLoading, setCepLoading] = useState(false);
   const isOwner = userType === 'owner';
   const primaryColor = isOwner ? 'orange' : 'amber';
+  const [enderecoTravado, setEnderecoTravado] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -50,6 +51,8 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
 
   const [cpfError, setCpfError] = useState('');
   const [senhaError, setSenhaError] = useState('');
+  const [showSenha, setShowSenha] = useState(false);
+  const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
 
   const formatCpf = (value: string): string => {
     const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -122,13 +125,17 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
   };
 
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value;
+    const rawValue = e.target.value.replace(/\D/g, '');
+
     setFormData((prev) => ({
       ...prev,
       endereco: { ...prev.endereco, cep: rawValue },
     }));
 
     const digits = rawValue.replace(/\D/g, '');
+    if (digits.length < 8) {
+  setEnderecoTravado(false);
+}
     if (digits.length === 8) {
       setCepLoading(true);
       try {
@@ -146,6 +153,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
               complemento: data.complemento || prev.endereco.complemento,
             },
           }));
+           setEnderecoTravado(true);
         } else {
           toast.error('CEP não encontrado.');
         }
@@ -231,14 +239,30 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                 <Label htmlFor="senha">Senha</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="senha" name="senha" type="password" value={formData.senha} onChange={handleSenhaChange} className="pl-10" required />
+                  <Input id="senha" name="senha" type={showSenha ? 'text' : 'password'} value={formData.senha} onChange={handleSenhaChange} className="pl-10 pr-10" required />
+                  <button
+                    type="button"
+                    onClick={() => setShowSenha((prev) => !prev)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmarSenha">Confirmar Senha</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="confirmarSenha" name="confirmarSenha" type="password" value={formData.confirmarSenha} onChange={handleConfirmarSenhaChange} className="pl-10" required />
+                  <Input id="confirmarSenha" name="confirmarSenha" type={showConfirmarSenha ? 'text' : 'password'} value={formData.confirmarSenha} onChange={handleConfirmarSenhaChange} className="pl-10 pr-10" required />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmarSenha((prev) => !prev)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label={showConfirmarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showConfirmarSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
                 {senhaError && <p className="text-xs text-red-500">{senhaError}</p>}
               </div>
@@ -268,31 +292,31 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="endereco.cep">CEP</Label>
-                  <Input id="endereco.cep" name="endereco.cep" value={formData.endereco.cep} onChange={handleCepChange} placeholder="00000-000" required />
+                  <Input id="endereco.cep" name="endereco.cep" value={formData.endereco.cep} onChange={handleCepChange} placeholder="00000-000" required  maxLength={8}/>
                   {cepLoading && <p className="text-xs text-orange-500">Buscando endereço...</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="endereco.uf">UF</Label>
-                  <Input id="endereco.uf" name="endereco.uf" value={formData.endereco.uf} onChange={handleInputChange} maxLength={2} required />
+                  <Input id="endereco.uf" name="endereco.uf" value={formData.endereco.uf} onChange={handleInputChange} disabled={enderecoTravado} maxLength={2} required />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endereco.logradouro">Logradouro</Label>
-                <Input id="endereco.logradouro" name="endereco.logradouro" value={formData.endereco.logradouro} onChange={handleInputChange} required />
+                <Input id="endereco.logradouro" name="endereco.logradouro" value={formData.endereco.logradouro} onChange={handleInputChange} required disabled={enderecoTravado} />
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="endereco.numero">Nº</Label>
-                  <Input id="endereco.numero" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} required />
+                  <Input id="endereco.numero" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} required  />
                 </div>
                 <div className="col-span-2 space-y-2">
                   <Label htmlFor="endereco.bairro">Bairro</Label>
-                  <Input id="endereco.bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} required />
+                  <Input id="endereco.bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} required disabled={enderecoTravado} />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endereco.cidade">Cidade</Label>
-                <Input id="endereco.cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} required />
+                <Input id="endereco.cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} required disabled={enderecoTravado}/>
               </div>
             </div>
           </div>
@@ -324,16 +348,39 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="especialidades">Especialidades (separadas por vírgula)</Label>
-                    <div className="relative">
-                      <ClipboardList className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                      <Input
-                        id="especialidades"
-                        name="especialidades"
-                        placeholder="Cachorros, Gatos, Idosos..."
-                        onChange={(e) => setFormData(prev => ({ ...prev, especialidades: e.target.value.split(',').map(s => s.trim()) }))}
-                        className="pl-10"
-                      />
+                    <Label>Especialidades</Label>
+                    <div className="flex flex-col gap-2 pt-1">
+                      {[
+                        { value: 'Cachorro', label: '🐶 Cachorro' },
+                        { value: 'Gato',     label: '🐱 Gato'     },
+                      ].map(({ value, label }) => {
+                        const checked = formData.especialidades.includes(value);
+                        return (
+                          <label
+                            key={value}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all select-none ${
+                              checked
+                                ? 'border-amber-400 bg-amber-50 text-amber-800'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-amber-200 hover:bg-amber-50/40'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="accent-amber-500 w-4 h-4"
+                              checked={checked}
+                              onChange={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  especialidades: checked
+                                    ? prev.especialidades.filter((s) => s !== value)
+                                    : [...prev.especialidades, value],
+                                }))
+                              }
+                            />
+                            <span className="font-medium">{label}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
