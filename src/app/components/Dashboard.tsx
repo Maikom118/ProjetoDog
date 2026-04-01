@@ -28,6 +28,7 @@ import { Input } from './ui/input';
 import { toast } from 'sonner';
 import { CaregiverFilters } from '../App';
 import { cuidadoresApi, matchApi } from '../../lib/api';
+import { getChatStorageKey } from '../../lib/chatStorage';
 
 interface ChatMessage {
   id: number;
@@ -36,7 +37,15 @@ interface ChatMessage {
   time: string;
 }
 
-type FlowStep = 'pet_name' | 'pet_type' | 'pet_size' | 'special_care' | 'special_care_desc' | 'pet_behavior';
+type FlowStep =
+  | 'pet_name'
+  | 'pet_type'
+  | 'pet_size'
+  | 'special_care'
+  | 'special_care_desc'
+  | 'pet_behavior'
+  | 'checkin_date'
+  | 'checkout_date';
 
 interface FlowState {
   step: FlowStep;
@@ -45,6 +54,9 @@ interface FlowState {
   petSize?: string;
   specialCare?: boolean;
   specialCareDesc?: string;
+  petBehavior?: string;
+  dataEntrada?: string;
+  dataSaida?: string;
 }
 
 interface PersistedChatState {
@@ -53,9 +65,6 @@ interface PersistedChatState {
   flow: FlowState | null;
   postAction: 'find_caregiver' | null;
 }
-
-const CHAT_STORAGE_PREFIX = 'petconnect-chat-history';
-const CHAT_STORAGE_VERSION = 'v2';
 
 function getUserInfo(): { firstName: string; fullName: string; initials: string } {
   const token = localStorage.getItem('token');
@@ -86,38 +95,8 @@ function getUserFirstName(): string {
   return getUserInfo().firstName;
 }
 
-function getLegacyChatStorageKey(): string {
-  const token = localStorage.getItem('token');
-  if (!token) return `${CHAT_STORAGE_PREFIX}:guest`;
-
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    const userId =
-      payload.sub ||
-      payload.userId ||
-      payload.user_id ||
-      payload.email ||
-      payload.unique_name ||
-      payload.name;
-
-    return `${CHAT_STORAGE_PREFIX}:${String(userId ?? 'guest')}`;
-  } catch {
-    return `${CHAT_STORAGE_PREFIX}:guest`;
-  }
-}
-
-function getChatStorageKey(): string {
-  return `${getLegacyChatStorageKey()}:${CHAT_STORAGE_VERSION}`;
-}
-
 function loadPersistedChatState(): PersistedChatState | null {
   try {
-    const legacyKey = getLegacyChatStorageKey();
-    const legacyRaw = localStorage.getItem(legacyKey);
-    if (legacyRaw) {
-      localStorage.removeItem(legacyKey);
-    }
-
     const raw = localStorage.getItem(getChatStorageKey());
     if (!raw) return null;
 
@@ -152,7 +131,6 @@ function persistChatState(state: PersistedChatState) {
 
 function clearPersistedChatState() {
   try {
-    localStorage.removeItem(getLegacyChatStorageKey());
     localStorage.removeItem(getChatStorageKey());
   } catch {
     // Ignore storage cleanup failures.
@@ -257,10 +235,23 @@ const FLOW_PROMPTS: Record<FlowStep, string[]> = {
     'Perfeito! Só mais uma pergunta! 🌟\n\nComo você descreveria o **jeito de ser do seu pet**? Nos ajuda a encontrar o cuidador mais compatível!',
     'Ufa, última etapa! 🎉\n\nMe conta: como é a **personalidade do seu pet**? Tímido, brincalhão, ansioso? Qualquer detalhe ajuda!',
   ],
+  checkin_date: [
+    '📅 Quando seu pet vai precisar do cuidador? Selecione a **data de entrada**!',
+    '📅 Ótimo! Agora me diz: qual é a **data de entrada** do seu pet?',
+    '📅 Estamos quase lá! Selecione a **data em que o pet chega** ao cuidador.',
+    '📅 Perfeito! Agora escolha a **data de início** da estadia.',
+  ],
+  checkout_date: [
+    '📅 E quando ele volta pra casa? Selecione a **data de saída**!',
+    '📅 Ótimo! Agora me diz a **data de saída** — quando seu pet vai embora.',
+    '📅 Quase pronto! Selecione a **data em que o pet retorna** pra você.',
+    '📅 Última etapa! Quando seu pet volta? Escolha a **data de saída**.',
+  ],
 };
 
 const INPUT_STEPS: FlowStep[] = ['pet_name', 'special_care_desc', 'pet_behavior'];
 const BUTTON_STEPS: FlowStep[] = ['pet_type', 'pet_size', 'special_care'];
+const DATE_STEPS: FlowStep[] = ['checkin_date', 'checkout_date'];
 
 const MAX_LENGTH: Partial<Record<FlowStep, number>> = {
   pet_name: 20,
@@ -317,6 +308,8 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
   const [typing, setTyping] = useState(false);
   const [flow, setFlow] = useState<FlowState | null>(() => persistedStateRef.current?.flow ?? null);
   const [postAction, setPostAction] = useState<'find_caregiver' | null>(() => persistedStateRef.current?.postAction ?? null);
+  const [dateInput, setDateInput] = useState('');
+  const today = new Date().toISOString().split('T')[0];
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -436,12 +429,35 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
     }
 
     if (flow.step === 'pet_behavior') {
-      finishFlow({ ...flow, step: 'pet_behavior' }, trimmed);
+      const next: FlowState = { ...flow, step: 'checkin_date', petBehavior: trimmed };
+      setFlow(next);
+      addBotMessage(pickRandom(FLOW_PROMPTS.checkin_date));
     }
   };
 
-  const finishFlow = async (currentFlow: FlowState, behavior: string) => {
-    const { petName, petType, petSize, specialCareDesc } = currentFlow;
+  function formatDatePtBR(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  const handleDateSubmit = () => {
+    if (!flow || !dateInput) return;
+    const isoDate = new Date(dateInput + 'T12:00:00').toISOString();
+
+    if (flow.step === 'checkin_date') {
+      addUserMessage(`📅 ${formatDatePtBR(dateInput)}`);
+      setDateInput('');
+      setFlow({ ...flow, step: 'checkout_date', dataEntrada: isoDate });
+      addBotMessage(pickRandom(FLOW_PROMPTS.checkout_date));
+    } else if (flow.step === 'checkout_date') {
+      addUserMessage(`📅 ${formatDatePtBR(dateInput)}`);
+      setDateInput('');
+      finishFlow({ ...flow, dataSaida: isoDate });
+    }
+  };
+
+  const finishFlow = async (currentFlow: FlowState) => {
+    const { petName, petType, petSize, specialCareDesc, petBehavior } = currentFlow;
     setFlow(null);
 
     const displayName = petName ?? 'seu pet';
@@ -461,7 +477,7 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
       especie:          petType ? stripEmoji(petType) : '',
       porte:            petSize ? stripEmoji(petSize) : '',
       cuidadosEspeciais: specialCareDesc ?? '',
-      descricao:        behavior,
+      descricao:        petBehavior ?? '',
     };
 
     console.log('[Chat] Enviando para /api/Match/encontrar-cuidador:', requestBody);
@@ -672,6 +688,33 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
               {input.length}/{currentMaxLength}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Date input — shown for checkin_date, checkout_date */}
+      {flow && DATE_STEPS.includes(flow.step) && !typing && (
+        <div className="px-3 pb-3 pt-2 bg-white rounded-b-2xl border-t border-gray-100">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={dateInput}
+              min={
+                flow.step === 'checkout_date' && flow.dataEntrada
+                  ? flow.dataEntrada.split('T')[0]
+                  : today
+              }
+              onChange={(e) => setDateInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleDateSubmit()}
+              className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-200 outline-none focus:border-orange-400 text-gray-700"
+            />
+            <button
+              onClick={handleDateSubmit}
+              disabled={!dateInput}
+              className="w-8 h-8 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 rounded-lg flex items-center justify-center transition-colors"
+            >
+              <Send className="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
       )}
     </div>
