@@ -119,6 +119,6 @@ export const reservasApi = {
     apiRequest<Reserva>('/api/reservas', 'POST', data),
   getAll: () =>
     apiRequest<Reserva[]>('/api/reservas', 'GET'),
-  updateStatus: (id: string, status: string) =>
+  updateStatus: (id: string, status: Reserva['status']) =>
     apiRequest<Reserva>(`/api/reservas/${id}/status`, 'PATCH', { status }),
 };
