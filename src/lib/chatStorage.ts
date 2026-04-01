@@ -5,24 +5,29 @@ function stripEmoji(s: string): string {
   return s.replace(/^[^\s]+\s/, '').trim();
 }
 
-function getLegacyKey(): string {
+function decodeTokenPayload(): Record<string, unknown> | null {
   const token = localStorage.getItem('token');
-  if (!token) return `${CHAT_STORAGE_PREFIX}:guest`;
+  if (!token) return null;
   try {
-    const payload = JSON.parse(
-      atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
-    );
-    const userId =
-      payload.sub ||
-      payload.userId ||
-      payload.user_id ||
-      payload.email ||
-      payload.unique_name ||
-      payload.name;
-    return `${CHAT_STORAGE_PREFIX}:${String(userId ?? 'guest')}`;
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
   } catch {
-    return `${CHAT_STORAGE_PREFIX}:guest`;
+    return null;
   }
+}
+
+function getLegacyKey(): string {
+  const payload = decodeTokenPayload();
+  if (!payload) return `${CHAT_STORAGE_PREFIX}:guest`;
+  const userId =
+    payload.sub ||
+    payload.userId ||
+    payload.user_id ||
+    payload.nameid ||
+    payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
+    payload.email ||
+    payload.unique_name ||
+    payload.name;
+  return `${CHAT_STORAGE_PREFIX}:${String(userId ?? 'guest')}`;
 }
 
 export function getChatStorageKey(): string {
@@ -30,23 +35,19 @@ export function getChatStorageKey(): string {
 }
 
 export function getUserId(): string | null {
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(
-      atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
-    );
-    return (
-      payload.sub ||
-      payload.userId ||
-      payload.user_id ||
-      payload.nameid ||
-      payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
-      null
-    );
-  } catch {
-    return null;
-  }
+  const payload = decodeTokenPayload();
+  if (!payload) return null;
+  return (
+    (payload.sub as string) ||
+    (payload.userId as string) ||
+    (payload.user_id as string) ||
+    (payload.nameid as string) ||
+    (payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] as string) ||
+    (payload.email as string) ||
+    (payload.unique_name as string) ||
+    (payload.name as string) ||
+    null
+  );
 }
 
 export interface StoredPetData {
