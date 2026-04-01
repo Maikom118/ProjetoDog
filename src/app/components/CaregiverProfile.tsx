@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Cuidador } from '../../lib/api';
+import { Cuidador, reservasApi } from '../../lib/api';
+import { getPetData, StoredPetData } from '../../lib/chatStorage';
 import {
   ArrowLeft,
   MapPin,
@@ -117,6 +118,45 @@ const WHAT_INCLUDED = [
 
 export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
   const [mapError, setMapError] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [petData, setPetData] = useState<StoredPetData | null>(null);
+
+  const handleSolicitarOrcamento = () => {
+    const data = getPetData();
+    setPetData(data);
+    setShowModal(true);
+  };
+
+  const calcDays = (entrada: string, saida: string) =>
+    Math.max(1, Math.ceil((new Date(saida).getTime() - new Date(entrada).getTime()) / (1000 * 60 * 60 * 24)));
+
+  const handleConfirmar = async () => {
+    if (!petData?.dataEntrada || !petData?.dataSaida) return;
+    const dias = calcDays(petData.dataEntrada, petData.dataSaida);
+    const valorTotal = dias * cuidador.valorDiaria;
+    setSubmitting(true);
+    try {
+      await reservasApi.create({
+        cuidadorId: cuidador.id,
+        nomePet: petData.petName,
+        especie: petData.petType,
+        porte: petData.petSize,
+        cuidadosEspeciais: petData.specialCareDesc,
+        descricaoPet: petData.petBehavior,
+        dataEntrada: petData.dataEntrada,
+        dataSaida: petData.dataSaida,
+        valorTotal,
+      });
+      setShowModal(false);
+      setShowSuccess(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar reserva');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     window.history.pushState({}, '', `/cuidador/${cuidador.id}`);
@@ -211,7 +251,7 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                   WhatsApp
                 </a>
               )}
-              <button className="px-6 py-3 bg-white text-orange-600 rounded-xl font-semibold shadow-lg hover:bg-orange-50 transition-colors">
+              <button onClick={handleSolicitarOrcamento} className="px-6 py-3 bg-white text-orange-600 rounded-xl font-semibold shadow-lg hover:bg-orange-50 transition-colors">
                 Solicitar Orçamento
               </button>
             </div>
@@ -420,7 +460,7 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                     Chamar no WhatsApp
                   </a>
                 )}
-                <button className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold transition-colors shadow-md">
+                <button onClick={handleSolicitarOrcamento} className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold transition-colors shadow-md">
                   <Calendar className="w-5 h-5" />
                   Solicitar Orçamento
                 </button>
@@ -493,12 +533,143 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
               WhatsApp
             </a>
           )}
-          <button className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm">
+          <button onClick={handleSolicitarOrcamento} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm">
             Orçamento
           </button>
         </div>
         <div className="sm:hidden h-20" />
       </div>
+
+      {/* Modal de revisão de reserva */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-5">Revisar Solicitação</h2>
+
+              {!petData || !petData.dataEntrada || !petData.dataSaida ? (
+                <div className="text-center py-4 text-gray-500">
+                  <PawPrint className="w-10 h-10 text-orange-200 mx-auto mb-3" />
+                  <p className="font-semibold">Dados do pet não encontrados</p>
+                  <p className="text-sm mt-1">Use o chat para informar os dados do seu pet antes de solicitar um orçamento.</p>
+                  <button onClick={() => setShowModal(false)} className="mt-4 px-6 py-2 bg-gray-100 text-gray-600 rounded-xl font-semibold">
+                    Fechar
+                  </button>
+                </div>
+              ) : (() => {
+                const dias = calcDays(petData.dataEntrada!, petData.dataSaida!);
+                const valorTotal = dias * cuidador.valorDiaria;
+                const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+                return (
+                  <>
+                    {/* Cuidador */}
+                    <div className="p-4 bg-orange-50 rounded-xl mb-4">
+                      <p className="text-xs text-gray-400 font-medium mb-1">Cuidador</p>
+                      <p className="font-bold text-gray-800">{cuidador.nome}</p>
+                      {cuidador.endereco?.cidade && (
+                        <p className="text-sm text-gray-500">{cuidador.endereco.cidade}, {cuidador.endereco.uf}</p>
+                      )}
+                    </div>
+
+                    {/* Pet */}
+                    <div className="space-y-2 mb-4">
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Dados do Pet</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="p-3 bg-gray-50 rounded-xl">
+                          <p className="text-gray-400 text-xs">Nome</p>
+                          <p className="font-semibold text-gray-800">{petData.petName || '—'}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-xl">
+                          <p className="text-gray-400 text-xs">Espécie</p>
+                          <p className="font-semibold text-gray-800">{petData.petType || '—'}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-xl">
+                          <p className="text-gray-400 text-xs">Porte</p>
+                          <p className="font-semibold text-gray-800">{petData.petSize || '—'}</p>
+                        </div>
+                        {petData.specialCareDesc && (
+                          <div className="p-3 bg-gray-50 rounded-xl">
+                            <p className="text-gray-400 text-xs">Cuidados especiais</p>
+                            <p className="font-semibold text-gray-800 text-xs">{petData.specialCareDesc}</p>
+                          </div>
+                        )}
+                      </div>
+                      {petData.petBehavior && (
+                        <div className="p-3 bg-gray-50 rounded-xl text-sm">
+                          <p className="text-gray-400 text-xs mb-1">Comportamento</p>
+                          <p className="text-gray-700">{petData.petBehavior}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Datas */}
+                    <div className="space-y-2 mb-4">
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Período da Estadia</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="p-3 bg-gray-50 rounded-xl">
+                          <p className="text-gray-400 text-xs">Entrada</p>
+                          <p className="font-semibold text-gray-800">{fmtDate(petData.dataEntrada!)}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-xl">
+                          <p className="text-gray-400 text-xs">Saída</p>
+                          <p className="font-semibold text-gray-800">{fmtDate(petData.dataSaida!)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Previsão de valor */}
+                    <div className="p-4 bg-orange-50 rounded-xl mb-6">
+                      <p className="text-xs text-gray-400 font-medium mb-2">Previsão de Valor</p>
+                      <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                        <span>{dias} dia{dias !== 1 ? 's' : ''} × R$ {cuidador.valorDiaria.toFixed(2)}/dia</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-800">Total estimado</span>
+                        <span className="text-2xl font-bold text-orange-500">R$ {valorTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowModal(false)}
+                        className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleConfirmar}
+                        disabled={submitting}
+                        className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl font-semibold transition-colors"
+                      >
+                        {submitting ? 'Enviando...' : 'Confirmar'}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup de sucesso */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-9 h-9 text-green-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Solicitação Enviada!</h2>
+            <p className="text-gray-500 text-sm mb-6">O cuidador irá analisar sua solicitação e entrará em contato em breve. Acompanhe o status na aba de Reservas.</p>
+            <button
+              onClick={() => setShowSuccess(false)}
+              className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold transition-colors"
+            >
+              Ok, entendi!
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

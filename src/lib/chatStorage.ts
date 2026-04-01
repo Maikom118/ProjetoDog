@@ -60,7 +60,25 @@ export interface StoredPetData {
   dataSaida: string | null;    // ISO string ou null
 }
 
+const PET_SNAPSHOT_SUFFIX = ':pet-snapshot';
+
+export function savePetDataSnapshot(data: StoredPetData): void {
+  try {
+    localStorage.setItem(getLegacyKey() + PET_SNAPSHOT_SUFFIX, JSON.stringify(data));
+  } catch {}
+}
+
 export function getPetData(): StoredPetData | null {
+  // Check snapshot first (saved after flow completes)
+  try {
+    const raw = localStorage.getItem(getLegacyKey() + PET_SNAPSHOT_SUFFIX);
+    if (raw) {
+      const parsed = JSON.parse(raw) as StoredPetData;
+      if (parsed.petName !== undefined) return parsed;
+    }
+  } catch {}
+
+  // Fall back to live flow state
   try {
     const raw = localStorage.getItem(getChatStorageKey());
     if (!raw) return null;
