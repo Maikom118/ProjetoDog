@@ -2,7 +2,7 @@ const BASE_URL = 'https://pets-api.delo.dev.br';
 
 export async function apiRequest<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' = 'GET',
   body?: any,
   headers: Record<string, string> = {}
 ): Promise<T> {
