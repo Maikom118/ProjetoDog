@@ -82,3 +82,43 @@ export const matchApi = {
   encontrarCuidador: (data: MatchRequest) =>
     apiRequest<Cuidador[]>('/api/Match/encontrar-cuidador', 'POST', data),
 };
+
+// ─── Reservas ────────────────────────────────────────────────────────────────
+
+export interface Reserva {
+  id: string;
+  cuidadorId: string;
+  donoId?: string;
+  nomePet: string;
+  especie: string;
+  porte: string;
+  cuidadosEspeciais: string;
+  descricaoPet: string;
+  dataEntrada: string;
+  dataSaida: string;
+  valorTotal: number;
+  status: 'Pendente' | 'Aceito' | 'Recusado';
+  cuidadorNome?: string;
+  donoNome?: string;
+}
+
+export interface CreateReservaRequest {
+  cuidadorId: string;
+  nomePet: string;
+  especie: string;
+  porte: string;
+  cuidadosEspeciais: string;
+  descricaoPet: string;
+  dataEntrada: string;
+  dataSaida: string;
+  valorTotal: number;
+}
+
+export const reservasApi = {
+  create: (data: CreateReservaRequest) =>
+    apiRequest<Reserva>('/api/reservas', 'POST', data),
+  getAll: () =>
+    apiRequest<Reserva[]>('/api/reservas', 'GET'),
+  updateStatus: (id: string, status: string) =>
+    apiRequest<Reserva>(`/api/reservas/${id}/status`, 'PATCH', { status }),
+};
