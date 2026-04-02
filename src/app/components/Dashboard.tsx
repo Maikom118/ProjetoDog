@@ -1043,39 +1043,44 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
         </header>
 
         {/* Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-8 bg-orange-50">
           {/* Página de Perfil */}
           {activeTab === 'profile' && <UserProfilePage />}
 
           {/* Aba de Reservas */}
           {activeTab === 'bookings' && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              {/* Header */}
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">
-                  {isCaregiver ? 'Solicitações de Reserva' : 'Minhas Reservas'}
-                </h1>
-                <p className="text-gray-500 text-sm mt-1">
-                  {isCaregiver
-                    ? 'Gerencie as solicitações dos donos de pets'
-                    : 'Acompanhe o status das suas reservas'}
-                </p>
+            <div className="space-y-6">
+              {/* Header da aba */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800">
+                    {isCaregiver ? 'Solicitações de Reserva' : 'Minhas Reservas'}
+                  </h1>
+                  <p className="text-gray-500 text-sm mt-1">
+                    {isCaregiver ? 'Gerencie as solicitações dos donos de pets' : 'Acompanhe o status das suas reservas'}
+                  </p>
+                </div>
+                {!reservasLoading && reservas.length > 0 && (
+                  <span className="bg-orange-100 text-orange-600 font-bold text-sm px-4 py-2 rounded-full">
+                    {reservas.length} reserva{reservas.length !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
 
               {reservasLoading && (
-                <div className="flex items-center justify-center py-16 text-gray-400">
+                <div className="flex items-center justify-center py-20 text-gray-400">
                   <div className="w-8 h-8 border-4 border-orange-400 border-t-transparent rounded-full animate-spin mr-3" />
                   Carregando reservas...
                 </div>
               )}
 
               {!reservasLoading && reservas.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mb-4">
-                    <Calendar className="w-10 h-10 text-orange-300" />
+                <div className="flex flex-col items-center justify-center py-24 text-center">
+                  <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center mb-5">
+                    <Calendar className="w-12 h-12 text-orange-300" />
                   </div>
-                  <p className="text-lg font-semibold text-gray-700">Nenhuma reserva encontrada</p>
-                  <p className="text-sm text-gray-400 mt-1 max-w-xs">
+                  <p className="text-xl font-bold text-gray-700">Nenhuma reserva encontrada</p>
+                  <p className="text-sm text-gray-400 mt-2 max-w-xs">
                     {isCaregiver
                       ? 'Quando um dono solicitar seus serviços, as reservas aparecerão aqui.'
                       : 'Use o chat para encontrar um cuidador e faça sua primeira reserva.'}
@@ -1087,107 +1092,148 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                 const entrada = new Date(r.dataEntrada);
                 const saida = new Date(r.dataSaida);
                 const dias = Math.max(1, Math.ceil((saida.getTime() - entrada.getTime()) / (1000 * 60 * 60 * 24)));
-                const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+                const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                const fmtShort = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 
                 const isPendente = r.status === 'Pendente';
-                const isAceito = r.status === 'Aceito';
+                const isAceito   = r.status === 'Aceito';
+
+                const gradients = {
+                  Pendente: 'from-amber-400 via-orange-400 to-amber-500',
+                  Aceito:   'from-emerald-500 via-green-500 to-teal-500',
+                  Recusado: 'from-red-400 via-rose-500 to-red-500',
+                };
+                const gradient = gradients[r.status] ?? gradients.Pendente;
+
+                const speciesEmoji = r.especie?.toLowerCase().includes('gato') ? '🐱' : '🐶';
+                const porteLabel = r.porte === 'Pequeno' ? 'Pequeno porte' : r.porte === 'Médio' ? 'Médio porte' : r.porte === 'Grande' ? 'Grande porte' : r.porte;
 
                 return (
-                  <div key={r.id} className="rounded-2xl overflow-hidden shadow-md border border-gray-200">
-                    {/* Cabeçalho colorido */}
-                    <div className={`px-6 py-4 flex items-center justify-between ${isPendente ? 'bg-amber-500' : isAceito ? 'bg-green-600' : 'bg-red-500'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
-                          <PawPrint className="w-6 h-6 text-white" />
+                  <div key={r.id} className="rounded-3xl overflow-hidden shadow-lg border border-orange-200 bg-white">
+
+                    {/* ── Hero do card ── */}
+                    <div className={`relative bg-gradient-to-r ${gradient} px-8 py-7 overflow-hidden`}>
+                      {/* Decoração de fundo */}
+                      <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/10 rounded-full" />
+                      <div className="absolute -bottom-6 right-24 w-24 h-24 bg-white/10 rounded-full" />
+
+                      <div className="relative flex items-center justify-between gap-4">
+                        {/* Avatar + identidade */}
+                        <div className="flex items-center gap-5">
+                          <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-5xl shadow-md flex-shrink-0">
+                            {speciesEmoji}
+                          </div>
+                          <div>
+                            <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Pet</p>
+                            <p className="text-white text-3xl font-extrabold leading-tight">{r.nomePet}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{r.especie}</span>
+                              <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{porteLabel}</span>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-white font-bold text-lg leading-tight">{r.nomePet}</p>
-                          <p className="text-white/80 text-sm">{r.especie} · {r.porte}</p>
+
+                        {/* Badge de status */}
+                        <div className="flex-shrink-0 text-center">
+                          <div className="bg-white/20 backdrop-blur rounded-2xl px-5 py-3">
+                            <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-1">Status</p>
+                            <p className="text-white font-extrabold text-lg">{r.status}</p>
+                          </div>
                         </div>
                       </div>
-                      <span className="bg-white/20 text-white text-xs font-bold px-3 py-1.5 rounded-full">
-                        {r.status}
-                      </span>
                     </div>
 
-                    {/* Corpo branco */}
-                    <div className="bg-white px-6 py-5 space-y-4">
-                      {/* Datas */}
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="text-center p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <p className="text-xs text-gray-500 mb-1">Entrada</p>
-                          <p className="text-sm font-bold text-gray-800">{fmtDate(entrada)}</p>
+                    {/* ── Corpo ── */}
+                    <div className="bg-orange-50/60 px-8 py-6 space-y-5">
+
+                      {/* Período visual */}
+                      <div className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-orange-100">
+                        <div className="flex-1 text-center">
+                          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Entrada</p>
+                          <p className="text-base font-extrabold text-gray-800">{fmtShort(entrada)}</p>
+                          <p className="text-xs text-gray-500">{entrada.getFullYear()}</p>
                         </div>
-                        <div className="text-center p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <p className="text-xs text-gray-500 mb-1">Saída</p>
-                          <p className="text-sm font-bold text-gray-800">{fmtDate(saida)}</p>
+                        <div className="flex flex-col items-center gap-1 px-2">
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(dias, 7) }).map((_, i) => (
+                              <div key={i} className="w-2 h-2 rounded-full bg-orange-300" />
+                            ))}
+                            {dias > 7 && <span className="text-orange-400 text-xs font-bold">+{dias - 7}</span>}
+                          </div>
+                          <span className="text-orange-500 font-extrabold text-sm">{dias} dia{dias !== 1 ? 's' : ''}</span>
                         </div>
-                        <div className="text-center p-3 bg-orange-50 rounded-xl border border-orange-100">
-                          <p className="text-xs text-orange-500 mb-1">Duração</p>
-                          <p className="text-sm font-bold text-orange-700">{dias}d</p>
+                        <div className="flex-1 text-center">
+                          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Saída</p>
+                          <p className="text-base font-extrabold text-gray-800">{fmtShort(saida)}</p>
+                          <p className="text-xs text-gray-500">{saida.getFullYear()}</p>
                         </div>
                       </div>
 
                       {/* Pessoa relacionada */}
                       {!isCaregiver && r.cuidadorNome && (
-                        <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
-                          <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                            {r.cuidadorNome.charAt(0)}
+                        <div className="flex items-center gap-4 p-4 bg-orange-50 rounded-2xl border border-orange-100">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-extrabold text-lg flex-shrink-0 shadow-sm">
+                            {r.cuidadorNome.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-xs text-orange-500 font-medium">Cuidador</p>
-                            <p className="text-sm font-bold text-gray-800">{r.cuidadorNome}</p>
+                            <p className="text-xs text-orange-500 font-bold uppercase tracking-wider">Cuidador responsável</p>
+                            <p className="text-base font-extrabold text-gray-800 mt-0.5">{r.cuidadorNome}</p>
                           </div>
                         </div>
                       )}
                       {isCaregiver && r.donoNome && (
-                        <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                          <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                            {r.donoNome.charAt(0)}
+                        <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-extrabold text-lg flex-shrink-0 shadow-sm">
+                            {r.donoNome.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-xs text-blue-500 font-medium">Solicitante</p>
-                            <p className="text-sm font-bold text-gray-800">{r.donoNome}</p>
+                            <p className="text-xs text-blue-500 font-bold uppercase tracking-wider">Solicitante</p>
+                            <p className="text-base font-extrabold text-gray-800 mt-0.5">{r.donoNome}</p>
                           </div>
                         </div>
                       )}
 
-                      {/* Extras */}
-                      {r.cuidadosEspeciais && (
-                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <p className="text-xs text-gray-500 font-medium mb-1">Cuidados especiais</p>
-                          <p className="text-sm text-gray-700">{r.cuidadosEspeciais}</p>
-                        </div>
-                      )}
-                      {r.descricaoPet && (
-                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <p className="text-xs text-gray-500 font-medium mb-1">Comportamento</p>
-                          <p className="text-sm text-gray-700">{r.descricaoPet}</p>
+                      {/* Detalhes extras */}
+                      {(r.cuidadosEspeciais || r.descricaoPet) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {r.cuidadosEspeciais && (
+                            <div className="p-4 bg-yellow-50 rounded-2xl border border-yellow-100">
+                              <p className="text-xs text-yellow-600 font-bold uppercase tracking-wider mb-2">⚕️ Cuidados especiais</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{r.cuidadosEspeciais}</p>
+                            </div>
+                          )}
+                          {r.descricaoPet && (
+                            <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                              <p className="text-xs text-purple-500 font-bold uppercase tracking-wider mb-2">🐾 Comportamento</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{r.descricaoPet}</p>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* Rodapé */}
-                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      {/* Rodapé: valor + ações */}
+                      <div className="flex items-center justify-between pt-4 border-t-2 border-dashed border-orange-200">
                         <div>
-                          <p className="text-xs text-gray-400">Valor total estimado</p>
-                          <p className="text-2xl font-extrabold text-orange-500">R$ {r.valorTotal.toFixed(2)}</p>
+                          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Valor total estimado</p>
+                          <p className="text-3xl font-extrabold text-orange-500 mt-1">R$ {r.valorTotal.toFixed(2)}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{dias} dia{dias !== 1 ? 's' : ''} × R$ {(r.valorTotal / dias).toFixed(2)}/dia</p>
                         </div>
 
-                        {isCaregiver && r.status === 'Pendente' && (
-                          <div className="flex gap-2">
+                        {isCaregiver && isPendente && (
+                          <div className="flex gap-3">
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Recusado')}
                               disabled={updatingStatus === r.id}
-                              className="px-5 py-2.5 rounded-xl border-2 border-red-400 text-red-500 font-bold text-sm hover:bg-red-50 disabled:opacity-50 transition-colors"
+                              className="px-6 py-3 rounded-2xl border-2 border-red-300 text-red-500 font-bold text-sm hover:bg-red-50 disabled:opacity-40 transition-colors"
                             >
-                              {updatingStatus === r.id ? '...' : 'Recusar'}
+                              {updatingStatus === r.id ? '...' : '✕ Recusar'}
                             </button>
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Aceito')}
                               disabled={updatingStatus === r.id}
-                              className="px-5 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white font-bold text-sm disabled:opacity-50 transition-colors"
+                              className="px-6 py-3 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-bold text-sm disabled:opacity-40 transition-colors shadow-md"
                             >
-                              {updatingStatus === r.id ? '...' : 'Aceitar'}
+                              {updatingStatus === r.id ? '...' : '✓ Aceitar'}
                             </button>
                           </div>
                         )}

@@ -19,6 +19,8 @@ import {
   PawPrint,
   Smile,
   ExternalLink,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -122,31 +124,36 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [petData, setPetData] = useState<StoredPetData | null>(null);
+  const [editData, setEditData] = useState<StoredPetData | null>(null);
 
   const handleSolicitarOrcamento = () => {
     const data = getPetData();
     setPetData(data);
+    setEditData(data ? { ...data } : null);
     setShowModal(true);
   };
+
+  const updateEdit = (field: keyof StoredPetData, value: string | null) =>
+    setEditData((prev) => prev ? { ...prev, [field]: value } : prev);
 
   const calcDays = (entrada: string, saida: string) =>
     Math.max(1, Math.ceil((new Date(saida).getTime() - new Date(entrada).getTime()) / (1000 * 60 * 60 * 24)));
 
   const handleConfirmar = async () => {
-    if (!petData?.dataEntrada || !petData?.dataSaida) return;
-    const dias = calcDays(petData.dataEntrada, petData.dataSaida);
+    if (!editData?.dataEntrada || !editData?.dataSaida) return;
+    const dias = calcDays(editData.dataEntrada, editData.dataSaida);
     const valorTotal = dias * cuidador.valorDiaria;
     setSubmitting(true);
     try {
       await reservasApi.create({
         cuidadorId: cuidador.id,
-        nomePet: petData.petName,
-        especie: petData.petType,
-        porte: petData.petSize,
-        cuidadosEspeciais: petData.specialCareDesc,
-        descricaoPet: petData.petBehavior,
-        dataEntrada: petData.dataEntrada,
-        dataSaida: petData.dataSaida,
+        nomePet: editData.petName,
+        especie: editData.petType,
+        porte: editData.petSize,
+        cuidadosEspeciais: editData.specialCareDesc,
+        descricaoPet: editData.petBehavior,
+        dataEntrada: editData.dataEntrada,
+        dataSaida: editData.dataSaida,
         valorTotal,
       });
       setShowModal(false);
@@ -542,112 +549,185 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
 
       {/* Modal de revisão de reserva */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-5">Revisar Solicitação</h2>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] overflow-y-auto">
 
-              {!petData || !petData.dataEntrada || !petData.dataSaida ? (
-                <div className="text-center py-4 text-gray-500">
-                  <PawPrint className="w-10 h-10 text-orange-200 mx-auto mb-3" />
-                  <p className="font-semibold">Dados do pet não encontrados</p>
-                  <p className="text-sm mt-1">Use o chat para informar os dados do seu pet antes de solicitar um orçamento.</p>
-                  <button onClick={() => setShowModal(false)} className="mt-4 px-6 py-2 bg-gray-100 text-gray-600 rounded-xl font-semibold">
-                    Fechar
-                  </button>
+            {/* Header gradiente */}
+            <div className="relative bg-gradient-to-r from-orange-500 via-orange-500 to-amber-400 rounded-t-3xl sm:rounded-t-3xl px-6 pt-6 pb-8 overflow-hidden">
+              <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full" />
+              <div className="absolute -bottom-4 right-16 w-16 h-16 bg-white/10 rounded-full" />
+              <div className="flex items-start justify-between relative">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center text-2xl">
+                    🐾
+                  </div>
+                  <div>
+                    <p className="text-white/80 text-xs font-semibold uppercase tracking-wider">Revisar &amp; Editar</p>
+                    <h2 className="text-white text-xl font-extrabold leading-tight">Solicitação de Reserva</h2>
+                  </div>
                 </div>
-              ) : (() => {
-                const dias = calcDays(petData.dataEntrada!, petData.dataSaida!);
-                const valorTotal = dias * cuidador.valorDiaria;
-                const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-                return (
-                  <>
-                    {/* Cuidador */}
-                    <div className="p-4 bg-orange-50 rounded-xl mb-4">
-                      <p className="text-xs text-gray-400 font-medium mb-1">Cuidador</p>
-                      <p className="font-bold text-gray-800">{cuidador.nome}</p>
-                      {cuidador.endereco?.cidade && (
-                        <p className="text-sm text-gray-500">{cuidador.endereco.cidade}, {cuidador.endereco.uf}</p>
-                      )}
-                    </div>
-
-                    {/* Pet */}
-                    <div className="space-y-2 mb-4">
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Dados do Pet</p>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="p-3 bg-gray-50 rounded-xl">
-                          <p className="text-gray-400 text-xs">Nome</p>
-                          <p className="font-semibold text-gray-800">{petData.petName || '—'}</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-xl">
-                          <p className="text-gray-400 text-xs">Espécie</p>
-                          <p className="font-semibold text-gray-800">{petData.petType || '—'}</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-xl">
-                          <p className="text-gray-400 text-xs">Porte</p>
-                          <p className="font-semibold text-gray-800">{petData.petSize || '—'}</p>
-                        </div>
-                        {petData.specialCareDesc && (
-                          <div className="p-3 bg-gray-50 rounded-xl">
-                            <p className="text-gray-400 text-xs">Cuidados especiais</p>
-                            <p className="font-semibold text-gray-800 text-xs">{petData.specialCareDesc}</p>
-                          </div>
-                        )}
-                      </div>
-                      {petData.petBehavior && (
-                        <div className="p-3 bg-gray-50 rounded-xl text-sm">
-                          <p className="text-gray-400 text-xs mb-1">Comportamento</p>
-                          <p className="text-gray-700">{petData.petBehavior}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Datas */}
-                    <div className="space-y-2 mb-4">
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Período da Estadia</p>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="p-3 bg-gray-50 rounded-xl">
-                          <p className="text-gray-400 text-xs">Entrada</p>
-                          <p className="font-semibold text-gray-800">{fmtDate(petData.dataEntrada!)}</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-xl">
-                          <p className="text-gray-400 text-xs">Saída</p>
-                          <p className="font-semibold text-gray-800">{fmtDate(petData.dataSaida!)}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Previsão de valor */}
-                    <div className="p-4 bg-orange-50 rounded-xl mb-6">
-                      <p className="text-xs text-gray-400 font-medium mb-2">Previsão de Valor</p>
-                      <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
-                        <span>{dias} dia{dias !== 1 ? 's' : ''} × R$ {cuidador.valorDiaria.toFixed(2)}/dia</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-gray-800">Total estimado</span>
-                        <span className="text-2xl font-bold text-orange-500">R$ {valorTotal.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setShowModal(false)}
-                        className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={handleConfirmar}
-                        disabled={submitting}
-                        className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl font-semibold transition-colors"
-                      >
-                        {submitting ? 'Enviando...' : 'Confirmar'}
-                      </button>
-                    </div>
-                  </>
-                );
-              })()}
+                <button onClick={() => setShowModal(false)} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors">
+                  <X className="w-4 h-4 text-white" />
+                </button>
+              </div>
+              {/* Cuidador pill */}
+              <div className="mt-4 flex items-center gap-2 bg-white/20 backdrop-blur rounded-2xl px-4 py-2 w-fit relative">
+                <div className="w-7 h-7 bg-white/30 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  {cuidador.nome.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-white font-bold text-sm leading-tight">{cuidador.nome}</p>
+                  {cuidador.endereco?.cidade && (
+                    <p className="text-white/70 text-xs">{cuidador.endereco.cidade}, {cuidador.endereco.uf}</p>
+                  )}
+                </div>
+              </div>
             </div>
+
+            {!editData ? (
+              <div className="p-6 text-center py-10 text-gray-500">
+                <PawPrint className="w-10 h-10 text-orange-200 mx-auto mb-3" />
+                <p className="font-semibold">Dados do pet não encontrados</p>
+                <p className="text-sm mt-1">Use o chat para informar os dados do seu pet antes de solicitar um orçamento.</p>
+                <button onClick={() => setShowModal(false)} className="mt-4 px-6 py-2 bg-gray-100 text-gray-600 rounded-xl font-semibold">
+                  Fechar
+                </button>
+              </div>
+            ) : (() => {
+              const dias = editData.dataEntrada && editData.dataSaida
+                ? calcDays(editData.dataEntrada, editData.dataSaida)
+                : 0;
+              const valorTotal = dias * cuidador.valorDiaria;
+              const inputCls = "w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all";
+              const labelCls = "block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5";
+              return (
+                <div className="px-6 pb-6 pt-5 space-y-5">
+
+                  {/* Dados do Pet */}
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-3">
+                      <span className="w-5 h-5 bg-orange-100 rounded-lg flex items-center justify-center text-xs">🐶</span>
+                      Dados do Pet
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className={labelCls}>Nome do pet</label>
+                        <input
+                          className={inputCls}
+                          value={editData.petName}
+                          onChange={(e) => updateEdit('petName', e.target.value)}
+                          placeholder="Ex: Rex"
+                        />
+                      </div>
+                      <div className="relative">
+                        <label className={labelCls}>Espécie</label>
+                        <select
+                          className={inputCls + ' appearance-none pr-8'}
+                          value={editData.petType}
+                          onChange={(e) => updateEdit('petType', e.target.value)}
+                        >
+                          {['Cachorro', 'Gato', 'Pássaro', 'Roedor', 'Réptil', 'Peixe'].map((o) => (
+                            <option key={o}>{o}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 bottom-3 w-3.5 h-3.5 text-orange-400 pointer-events-none" />
+                      </div>
+                      <div className="relative">
+                        <label className={labelCls}>Porte</label>
+                        <select
+                          className={inputCls + ' appearance-none pr-8'}
+                          value={editData.petSize}
+                          onChange={(e) => updateEdit('petSize', e.target.value)}
+                        >
+                          {['Pequeno', 'Médio', 'Grande'].map((o) => (
+                            <option key={o}>{o}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 bottom-3 w-3.5 h-3.5 text-orange-400 pointer-events-none" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelCls}>Cuidados especiais</label>
+                        <textarea
+                          className={inputCls + ' resize-none'}
+                          rows={2}
+                          value={editData.specialCareDesc}
+                          onChange={(e) => updateEdit('specialCareDesc', e.target.value)}
+                          placeholder="Ex: toma remédio às 8h..."
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelCls}>Comportamento</label>
+                        <textarea
+                          className={inputCls + ' resize-none'}
+                          rows={2}
+                          value={editData.petBehavior}
+                          onChange={(e) => updateEdit('petBehavior', e.target.value)}
+                          placeholder="Ex: brincalhão, dócil..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Período */}
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-3">
+                      <span className="w-5 h-5 bg-orange-100 rounded-lg flex items-center justify-center text-xs">📅</span>
+                      Período da Estadia
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Entrada</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={editData.dataEntrada?.slice(0, 10) ?? ''}
+                          onChange={(e) => updateEdit('dataEntrada', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Saída</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={editData.dataSaida?.slice(0, 10) ?? ''}
+                          onChange={(e) => updateEdit('dataSaida', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Previsão de valor */}
+                  {dias > 0 && (
+                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500 font-semibold">{dias} dia{dias !== 1 ? 's' : ''} × R$ {cuidador.valorDiaria.toFixed(2)}/dia</span>
+                      </div>
+                      <div className="flex items-end justify-between">
+                        <span className="text-sm font-bold text-gray-600">Total estimado</span>
+                        <span className="text-3xl font-extrabold text-orange-500">R$ {valorTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botões */}
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      onClick={() => setShowModal(false)}
+                      className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleConfirmar}
+                      disabled={submitting || !editData.dataEntrada || !editData.dataSaida || !editData.petName}
+                      className="flex-2 px-8 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-40 text-white rounded-2xl font-bold shadow-lg shadow-orange-200 transition-all"
+                    >
+                      {submitting ? 'Enviando...' : '✓ Confirmar Reserva'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
