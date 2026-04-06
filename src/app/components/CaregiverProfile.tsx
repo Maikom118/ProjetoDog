@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Cuidador, reservasApi } from '../../lib/api';
+import { Cuidador, UpdateCuidadorRequest, cuidadoresApi, reservasApi } from '../../lib/api';
+import { Edit2, Upload } from 'lucide-react';
 import { getPetData, StoredPetData } from '../../lib/chatStorage';
 import {
   ArrowLeft,
@@ -118,6 +119,17 @@ const WHAT_INCLUDED = [
   'Relatório diário do pet',
 ];
 
+function getCurrentUserId(): string | null {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
   const [mapError, setMapError] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -125,6 +137,54 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
   const [submitting, setSubmitting] = useState(false);
   const [petData, setPetData] = useState<StoredPetData | null>(null);
   const [editData, setEditData] = useState<StoredPetData | null>(null);
+
+  // Edit profile
+  const isOwnProfile = getCurrentUserId() === cuidador.id;
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [profileData, setProfileData] = useState<UpdateCuidadorRequest>({
+    nome: cuidador.nome ?? '',
+    telefone: cuidador.telefone ?? '',
+    bio: cuidador.bio ?? '',
+    hourlyRate: cuidador.valorDiaria ?? 0,
+    especialidades: cuidador.especialidades ?? [],
+  });
+  const [especialidadesInput, setEspecialidadesInput] = useState(
+    (cuidador.especialidades ?? []).join(', ')
+  );
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [currentCuidador, setCurrentCuidador] = useState(cuidador);
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const esp = especialidadesInput
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const updated = await cuidadoresApi.updateProfile({ ...profileData, especialidades: esp });
+      setCurrentCuidador((prev) => ({ ...prev, ...updated }));
+      toast.success('Perfil atualizado com sucesso!');
+      setShowEditModal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar perfil');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleUploadFoto = async (file: File) => {
+    setUploadingFoto(true);
+    try {
+      const res = await cuidadoresApi.uploadFoto(file);
+      if (res.fotoUrl) setCurrentCuidador((prev) => ({ ...prev, fotoUrl: res.fotoUrl }));
+      toast.success('Foto atualizada!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar foto');
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
 
   const handleSolicitarOrcamento = () => {
     const data = getPetData();
@@ -183,9 +243,9 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
     }
   };
 
-  const whatsappUrl = `https://wa.me/55${cuidador.telefone?.replace(/\D/g, '')}`;
-  const mapUrl = cuidador.endereco ? buildMapUrl(cuidador.endereco) : null;
-  const mapsLink = cuidador.endereco ? buildGoogleMapsLink(cuidador.endereco) : null;
+  const whatsappUrl = `https://wa.me/55${currentCuidador.telefone?.replace(/\D/g, '')}`;
+  const mapUrl = currentCuidador.endereco ? buildMapUrl(currentCuidador.endereco) : null;
+  const mapsLink = currentCuidador.endereco ? buildGoogleMapsLink(currentCuidador.endereco) : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -198,13 +258,24 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
           <ArrowLeft className="w-5 h-5" />
           <span className="text-sm font-medium">Voltar aos Cuidadores</span>
         </button>
-        <button
-          onClick={handleShare}
-          className="flex items-center gap-2 text-gray-600 hover:text-orange-500 transition-colors text-sm"
-        >
-          <Share2 className="w-4 h-4" />
-          Compartilhar
-        </button>
+        <div className="flex items-center gap-3">
+          {isOwnProfile && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            >
+              <Edit2 className="w-4 h-4" />
+              Editar Perfil
+            </button>
+          )}
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-2 text-gray-600 hover:text-orange-500 transition-colors text-sm"
+          >
+            <Share2 className="w-4 h-4" />
+            Compartilhar
+          </button>
+        </div>
       </div>
 
       {/* Hero */}
@@ -215,8 +286,36 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
         <div className="relative max-w-4xl mx-auto px-4 py-12">
           <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
             {/* Avatar */}
-            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white text-6xl border-4 border-white/40 shadow-2xl flex-shrink-0">
-              {cuidador.nome?.charAt(0).toUpperCase() || 'C'}
+            <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0">
+              {currentCuidador.fotoUrl ? (
+                <img
+                  src={currentCuidador.fotoUrl}
+                  alt={currentCuidador.nome}
+                  className="w-full h-full rounded-2xl object-cover border-4 border-white/40 shadow-2xl"
+                />
+              ) : (
+                <div className="w-full h-full rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white text-6xl border-4 border-white/40 shadow-2xl">
+                  {currentCuidador.nome?.charAt(0).toUpperCase() || 'C'}
+                </div>
+              )}
+              {isOwnProfile && (
+                <label className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-orange-50 transition-colors">
+                  {uploadingFoto ? (
+                    <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 text-orange-500" />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadFoto(file);
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             <div className="text-center sm:text-left flex-1">
@@ -728,6 +827,86 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de edição de perfil */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Editar Perfil</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {/* Nome */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Nome</label>
+                <input
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={profileData.nome}
+                  onChange={(e) => setProfileData((p) => ({ ...p, nome: e.target.value }))}
+                />
+              </div>
+              {/* Telefone */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Telefone</label>
+                <input
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={profileData.telefone}
+                  onChange={(e) => setProfileData((p) => ({ ...p, telefone: e.target.value }))}
+                />
+              </div>
+              {/* Valor diária */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Valor por dia (R$)</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={profileData.hourlyRate}
+                  onChange={(e) => setProfileData((p) => ({ ...p, hourlyRate: Number(e.target.value) }))}
+                />
+              </div>
+              {/* Bio */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Bio</label>
+                <textarea
+                  rows={3}
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                  value={profileData.bio}
+                  onChange={(e) => setProfileData((p) => ({ ...p, bio: e.target.value }))}
+                />
+              </div>
+              {/* Especialidades */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Especialidades (separadas por vírgula)</label>
+                <input
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={especialidadesInput}
+                  onChange={(e) => setEspecialidadesInput(e.target.value)}
+                  placeholder="Ex: Banho, Tosa, Adestramento"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                disabled={savingProfile}
+                className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white rounded-2xl font-bold transition-colors"
+              >
+                {savingProfile ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

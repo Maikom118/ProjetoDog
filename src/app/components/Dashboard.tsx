@@ -21,13 +21,15 @@ import {
   Shield,
   Clock,
   Star,
+  Edit2,
+  Upload,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { toast } from 'sonner';
 import { CaregiverFilters } from '../App';
-import { cuidadoresApi, matchApi, reservasApi, Reserva } from '../../lib/api';
+import { cuidadoresApi, matchApi, reservasApi, avaliacoesApi, Reserva, UpdateCuidadorRequest } from '../../lib/api';
 import { getChatStorageKey, savePetDataSnapshot } from '../../lib/chatStorage';
 
 interface ChatMessage {
@@ -760,6 +762,29 @@ function getFullUserProfile() {
 
 function UserProfilePage() {
   const profile = getFullUserProfile();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [profileData, setProfileData] = useState<UpdateCuidadorRequest | null>(null);
+  const [especialidadesInput, setEspecialidadesInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [overrideName, setOverrideName] = useState<string | null>(null);
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!profile) return;
+    const r = profile.role?.toLowerCase();
+    if (r !== 'cuidador' && r !== 'caregiver') return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    cuidadoresApi.getAll()
+      .then((lista) => {
+        const meu = lista.find((c) => c.id === payload.sub);
+        if (meu?.fotoUrl) setFotoUrl(meu.fotoUrl);
+      })
+      .catch(() => {});
+  }, []);
+
   if (!profile) return (
     <div className="flex items-center justify-center h-64 text-gray-400">
       Não foi possível carregar os dados do perfil.
@@ -767,9 +792,59 @@ function UserProfilePage() {
   );
 
   const { fullName, initials, email, role, sessionExpires } = profile;
+  const isCaregiver = role?.toLowerCase() === 'cuidador' || role?.toLowerCase() === 'caregiver';
+
+  const openEditModal = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const payload = JSON.parse(atob(token!.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const todos = await cuidadoresApi.getAll();
+      const cuidador = todos.find((c) => c.id === payload.sub);
+      if (!cuidador) throw new Error('Perfil não encontrado');
+      setProfileData({
+        nome: cuidador.nome ?? '',
+        telefone: cuidador.telefone ?? '',
+        bio: cuidador.bio ?? '',
+        hourlyRate: cuidador.valorDiaria ?? 0,
+        especialidades: cuidador.especialidades ?? [],
+      });
+      setEspecialidadesInput((cuidador.especialidades ?? []).join(', '));
+      setShowEditModal(true);
+    } catch {
+      toast.error('Erro ao carregar dados do perfil');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!profileData) return;
+    setSaving(true);
+    try {
+      const esp = especialidadesInput.split(',').map((s) => s.trim()).filter(Boolean);
+      await cuidadoresApi.updateProfile({ ...profileData, especialidades: esp });
+      setOverrideName(profileData.nome);
+      toast.success('Perfil atualizado com sucesso!');
+      setShowEditModal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar perfil');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUploadFoto = async (file: File) => {
+    setUploadingFoto(true);
+    try {
+      await cuidadoresApi.uploadFoto(file);
+      toast.success('Foto atualizada!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar foto');
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
 
   const infoCards = [
-    { icon: User,   label: 'Nome completo',   value: fullName || '—',  accent: 'bg-blue-50 text-blue-500' },
+    { icon: User,   label: 'Nome completo',   value: overrideName ?? fullName ?? '—',  accent: 'bg-blue-50 text-blue-500' },
     { icon: Mail,   label: 'E-mail',           value: email   || '—',  accent: 'bg-purple-50 text-purple-500' },
     { icon: Shield, label: 'Tipo de conta',    value: role    || '—',  accent: 'bg-orange-50 text-orange-500' },
     {
@@ -808,14 +883,39 @@ function UserProfilePage() {
 
       {/* Avatar sobreposto */}
       <div className="flex flex-col items-center -mt-14 mb-8 relative z-10">
-        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white text-4xl font-bold shadow-xl border-4 border-white ring-4 ring-orange-200">
-          {initials}
+        <div className="relative">
+          {fotoUrl ? (
+            <img src={fotoUrl} alt={overrideName ?? fullName ?? ''} className="w-28 h-28 rounded-full object-cover shadow-xl border-4 border-white ring-4 ring-orange-200" />
+          ) : (
+            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white text-4xl font-bold shadow-xl border-4 border-white ring-4 ring-orange-200">
+              {initials}
+            </div>
+          )}
+          {isCaregiver && (
+            <label className="absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-orange-50 transition-colors border border-orange-100">
+              {uploadingFoto ? (
+                <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4 text-orange-500" />
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadFoto(f); }} />
+            </label>
+          )}
         </div>
-        <h2 className="mt-4 text-2xl font-bold text-gray-800">{fullName || 'Usuário'}</h2>
+        <h2 className="mt-4 text-2xl font-bold text-gray-800">{overrideName ?? fullName ?? 'Usuário'}</h2>
         <span className="mt-2 inline-flex items-center gap-1.5 px-4 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-sm font-semibold shadow-sm capitalize">
           <Shield className="w-3.5 h-3.5" />
           {role || 'Membro'}
         </span>
+        {isCaregiver && (
+          <button
+            onClick={openEditModal}
+            className="mt-4 flex items-center gap-2 px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+          >
+            <Edit2 className="w-4 h-4" />
+            Editar Perfil
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -850,6 +950,48 @@ function UserProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* Modal editar perfil */}
+      {showEditModal && profileData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Editar Perfil</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Nome</label>
+                <input className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={profileData.nome} onChange={(e) => setProfileData((p) => p ? { ...p, nome: e.target.value } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Telefone</label>
+                <input className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={profileData.telefone} onChange={(e) => setProfileData((p) => p ? { ...p, telefone: e.target.value } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Valor por dia (R$)</label>
+                <input type="number" min="0" className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={profileData.hourlyRate} onChange={(e) => setProfileData((p) => p ? { ...p, hourlyRate: Number(e.target.value) } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Bio</label>
+                <textarea rows={3} className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none" value={profileData.bio} onChange={(e) => setProfileData((p) => p ? { ...p, bio: e.target.value } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Especialidades (separadas por vírgula)</label>
+                <input className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={especialidadesInput} onChange={(e) => setEspecialidadesInput(e.target.value)} placeholder="Ex: Banho, Tosa, Adestramento" />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button onClick={() => setShowEditModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">Cancelar</button>
+              <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white rounded-2xl font-bold transition-colors">
+                {saving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -869,9 +1011,28 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [reservasLoading, setReservasLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [avaliacaoModal, setAvaliacaoModal] = useState<{ reservaId: string; cuidadorId: string } | null>(null);
+  const [avaliacaoNota, setAvaliacaoNota] = useState(5);
+  const [avaliacaoComentario, setAvaliacaoComentario] = useState('');
+  const [avaliacaoFoto, setAvaliacaoFoto] = useState<File | null>(null);
+  const [avaliacaoLoading, setAvaliacaoLoading] = useState(false);
 
   const { firstName, fullName, initials } = getUserInfo();
   const isCaregiver = userRole?.toLowerCase() === 'cuidador' || userRole?.toLowerCase() === 'caregiver';
+  const [headerFotoUrl, setHeaderFotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isCaregiver) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    cuidadoresApi.getAll()
+      .then((lista) => {
+        const meu = lista.find((c) => c.id === payload.sub);
+        if (meu?.fotoUrl) setHeaderFotoUrl(meu.fotoUrl);
+      })
+      .catch(() => {});
+  }, [isCaregiver]);
 
   useEffect(() => {
     if (activeTab === 'bookings') {
@@ -888,11 +1049,29 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
     try {
       await reservasApi.updateStatus(id, status);
       setReservas((prev) => prev.map((r) => r.id === id ? { ...r, status } : r));
-      toast.success(status === 'Aceito' ? 'Reserva aceita!' : 'Reserva recusada.');
+      const msg = status === 'Aceita' ? 'Reserva aceita!' : status === 'Concluida' ? 'Reserva concluída!' : 'Reserva recusada.';
+      toast.success(msg);
     } catch {
       toast.error('Erro ao atualizar status da reserva');
     } finally {
       setUpdatingStatus(null);
+    }
+  };
+
+  const handleSubmitAvaliacao = async () => {
+    if (!avaliacaoModal) return;
+    setAvaliacaoLoading(true);
+    try {
+      await avaliacoesApi.create(avaliacaoModal.cuidadorId, avaliacaoNota, avaliacaoComentario, avaliacaoFoto ?? undefined);
+      toast.success('Avaliação enviada!');
+      setAvaliacaoModal(null);
+      setAvaliacaoNota(5);
+      setAvaliacaoComentario('');
+      setAvaliacaoFoto(null);
+    } catch {
+      toast.error('Erro ao enviar avaliação');
+    } finally {
+      setAvaliacaoLoading(false);
     }
   };
 
@@ -1035,9 +1214,13 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                 <p className="text-sm font-semibold text-gray-800 leading-tight">{fullName || 'Usuário'}</p>
                 <p className="text-xs text-gray-400 leading-tight capitalize">{userRole ?? 'Membro'}</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm border-2 border-orange-200 shadow-sm">
-                {initials}
-              </div>
+              {headerFotoUrl ? (
+                <img src={headerFotoUrl} alt={fullName ?? ''} className="w-10 h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm border-2 border-orange-200 shadow-sm">
+                  {initials}
+                </div>
+              )}
             </button>
           </div>
         </header>
@@ -1095,15 +1278,16 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                 const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
                 const fmtShort = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 
-                const isPendente = r.status === 'Pendente';
-                const isAceito   = r.status === 'Aceito';
+                const isPendente = r.status === 'Em análise';
+                const isAceito   = r.status === 'Aceita';
 
                 const gradients = {
-                  Pendente: 'from-amber-400 via-orange-400 to-amber-500',
-                  Aceito:   'from-emerald-500 via-green-500 to-teal-500',
-                  Recusado: 'from-red-400 via-rose-500 to-red-500',
+                  'Em análise': 'from-amber-400 via-orange-400 to-amber-500',
+                  Aceita:    'from-emerald-500 via-green-500 to-teal-500',
+                  Recusada:  'from-red-400 via-rose-500 to-red-500',
+                  Concluida: 'from-blue-500 via-indigo-500 to-purple-500',
                 };
-                const gradient = gradients[r.status] ?? gradients.Pendente;
+                const gradient = gradients[r.status] ?? gradients['Em análise'];
 
                 const speciesEmoji = r.especie?.toLowerCase().includes('gato') ? '🐱' : '🐶';
                 const porteLabel = r.porte === 'Pequeno' ? 'Pequeno porte' : r.porte === 'Médio' ? 'Médio porte' : r.porte === 'Grande' ? 'Grande porte' : r.porte;
@@ -1222,20 +1406,37 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                         {isCaregiver && isPendente && (
                           <div className="flex gap-3">
                             <button
-                              onClick={() => handleUpdateStatus(r.id, 'Recusado')}
+                              onClick={() => handleUpdateStatus(r.id, 'Recusada')}
                               disabled={updatingStatus === r.id}
                               className="px-6 py-3 rounded-2xl border-2 border-red-300 text-red-500 font-bold text-sm hover:bg-red-50 disabled:opacity-40 transition-colors"
                             >
                               {updatingStatus === r.id ? '...' : '✕ Recusar'}
                             </button>
                             <button
-                              onClick={() => handleUpdateStatus(r.id, 'Aceito')}
+                              onClick={() => handleUpdateStatus(r.id, 'Aceita')}
                               disabled={updatingStatus === r.id}
                               className="px-6 py-3 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-bold text-sm disabled:opacity-40 transition-colors shadow-md"
                             >
                               {updatingStatus === r.id ? '...' : '✓ Aceitar'}
                             </button>
                           </div>
+                        )}
+                        {!isCaregiver && isAceito && (
+                          <button
+                            onClick={() => handleUpdateStatus(r.id, 'Concluida')}
+                            disabled={updatingStatus === r.id}
+                            className="px-6 py-3 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm disabled:opacity-40 transition-colors shadow-md"
+                          >
+                            {updatingStatus === r.id ? '...' : '✓ Concluir'}
+                          </button>
+                        )}
+                        {!isCaregiver && (r.status === 'Concluida' || r.status === 'Aceita') && (
+                          <button
+                            onClick={() => setAvaliacaoModal({ reservaId: r.id, cuidadorId: r.cuidadorId })}
+                            className="px-6 py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-colors shadow-md"
+                          >
+                            ⭐ Avaliar
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1374,6 +1575,65 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             )}
           </div>
         </>
+      )}
+
+      {/* Modal de Avaliação */}
+      {avaliacaoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-extrabold text-gray-800">Avaliar Cuidador</h2>
+              <button onClick={() => setAvaliacaoModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Estrelas */}
+            <div>
+              <p className="text-sm font-semibold text-gray-500 mb-2">Nota</p>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => setAvaliacaoNota(n)}>
+                    <Star
+                      className={`w-8 h-8 transition-colors ${n <= avaliacaoNota ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Comentário */}
+            <div>
+              <p className="text-sm font-semibold text-gray-500 mb-2">Comentário</p>
+              <textarea
+                value={avaliacaoComentario}
+                onChange={(e) => setAvaliacaoComentario(e.target.value)}
+                rows={3}
+                placeholder="Como foi a experiência?"
+                className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+
+            {/* Foto opcional */}
+            <div>
+              <p className="text-sm font-semibold text-gray-500 mb-2">Foto (opcional)</p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setAvaliacaoFoto(e.target.files?.[0] ?? null)}
+                className="text-sm text-gray-500"
+              />
+            </div>
+
+            <button
+              onClick={handleSubmitAvaliacao}
+              disabled={avaliacaoLoading}
+              className="w-full py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm disabled:opacity-40 transition-colors shadow-md"
+            >
+              {avaliacaoLoading ? 'Enviando...' : 'Enviar Avaliação'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
