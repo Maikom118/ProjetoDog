@@ -149,7 +149,18 @@ export const reservasApi = {
     apiRequest<Reserva>(`/api/reservas/${id}/status`, 'PATCH', { novoStatus: status }),
 };
 
+export interface Avaliacao {
+  id: string;
+  nota: number;
+  comentario: string;
+  fotoUrl: string | null;
+  nomeDono: string;
+  dataCriacao: string;
+}
+
 export const avaliacoesApi = {
+  getByCuidador: (cuidadorId: string) =>
+    apiRequest<Avaliacao[]>(`/api/Avaliacoes/cuidador/${cuidadorId}`, 'GET'),
   create: async (cuidadorId: string, nota: number, comentario: string, foto?: File) => {
     const token = localStorage.getItem('token');
     const form = new FormData();

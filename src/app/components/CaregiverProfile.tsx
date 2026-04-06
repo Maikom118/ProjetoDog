@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Cuidador, UpdateCuidadorRequest, cuidadoresApi, reservasApi } from '../../lib/api';
+import { Avaliacao, Cuidador, UpdateCuidadorRequest, avaliacoesApi, cuidadoresApi, reservasApi } from '../../lib/api';
 import { Edit2, Upload } from 'lucide-react';
 import { getPetData, StoredPetData } from '../../lib/chatStorage';
 import {
@@ -154,6 +154,11 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [currentCuidador, setCurrentCuidador] = useState(cuidador);
+  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
+
+  useEffect(() => {
+    avaliacoesApi.getByCuidador(cuidador.id).then(setAvaliacoes).catch(() => {});
+  }, [cuidador.id]);
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
@@ -328,7 +333,11 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                 {[...Array(5)].map((_, i) => (
                   <Star key={i} className="w-5 h-5 fill-yellow-300 text-yellow-300" />
                 ))}
-                <span className="text-orange-100 text-sm ml-1">5.0 (47 avaliações)</span>
+                <span className="text-orange-100 text-sm ml-1">
+                  {avaliacoes.length > 0
+                    ? `${(avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(1)} (${avaliacoes.length} avaliação${avaliacoes.length !== 1 ? 'ões' : ''})`
+                    : 'Sem avaliações'}
+                </span>
               </div>
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-orange-50">
                 {cuidador.endereco?.cidade && (
@@ -441,39 +450,56 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                 <Star className="w-5 h-5 text-orange-500" />
                 Avaliações
               </h2>
-              <div className="flex items-center gap-3 mb-6 p-4 bg-orange-50 rounded-xl">
-                <div className="text-5xl font-bold text-orange-500">5.0</div>
-                <div>
-                  <div className="flex gap-0.5 mb-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                    ))}
+              {avaliacoes.length > 0 && (
+                <div className="flex items-center gap-3 mb-6 p-4 bg-orange-50 rounded-xl">
+                  <div className="text-5xl font-bold text-orange-500">
+                    {(avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(1)}
                   </div>
-                  <p className="text-sm text-gray-500">47 avaliações verificadas</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {MOCK_REVIEWS.map((review, i) => (
-                  <div key={i} className="p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center text-white font-bold text-sm">
-                          {review.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-800 text-sm">{review.name}</p>
-                          <p className="text-xs text-gray-400">{review.pet} • {review.date}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-0.5">
-                        {[...Array(review.rating)].map((_, s) => (
-                          <Star key={s} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                        ))}
-                      </div>
+                  <div>
+                    <div className="flex gap-0.5 mb-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                      ))}
                     </div>
-                    <p className="text-gray-600 text-sm leading-relaxed">{review.text}</p>
+                    <p className="text-sm text-gray-500">{avaliacoes.length} avaliação{avaliacoes.length !== 1 ? 'ões' : ''} verificada{avaliacoes.length !== 1 ? 's' : ''}</p>
                   </div>
-                ))}
+                </div>
+              )}
+              <div className="space-y-4">
+                {avaliacoes.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">Nenhuma avaliação ainda.</p>
+                ) : (
+                  avaliacoes.map((review) => (
+                    <div key={review.id} className="p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center text-white font-bold text-sm">
+                            {review.nomeDono.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-800 text-sm">{review.nomeDono}</p>
+                            <p className="text-xs text-gray-400">
+                              {new Date(review.dataCriacao).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-0.5">
+                          {[...Array(review.nota)].map((_, s) => (
+                            <Star key={s} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-gray-600 text-sm leading-relaxed">{review.comentario}</p>
+                      {review.fotoUrl && (
+                        <img
+                          src={review.fotoUrl}
+                          alt="Foto da avaliação"
+                          className="mt-3 rounded-xl max-h-48 object-cover"
+                        />
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </section>
 

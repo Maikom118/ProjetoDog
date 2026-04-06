@@ -29,7 +29,7 @@ import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { toast } from 'sonner';
 import { CaregiverFilters } from '../App';
-import { cuidadoresApi, matchApi, reservasApi, avaliacoesApi, Reserva, UpdateCuidadorRequest } from '../../lib/api';
+import { cuidadoresApi, matchApi, reservasApi, avaliacoesApi, Avaliacao, Reserva, UpdateCuidadorRequest } from '../../lib/api';
 import { getChatStorageKey, savePetDataSnapshot } from '../../lib/chatStorage';
 
 interface ChatMessage {
@@ -1011,6 +1011,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [reservasLoading, setReservasLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [avaliacaoMedia, setAvaliacaoMedia] = useState<number | null>(null);
   const [avaliacaoModal, setAvaliacaoModal] = useState<{ reservaId: string; cuidadorId: string } | null>(null);
   const [avaliacaoNota, setAvaliacaoNota] = useState(5);
   const [avaliacaoComentario, setAvaliacaoComentario] = useState('');
@@ -1035,7 +1036,13 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   }, [isCaregiver]);
 
   useEffect(() => {
-    if (activeTab === 'bookings') {
+    reservasApi.getAll()
+      .then(setReservas)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'bookings' && reservas.length === 0) {
       setReservasLoading(true);
       reservasApi.getAll()
         .then(setReservas)
@@ -1043,6 +1050,22 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
         .finally(() => setReservasLoading(false));
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!isCaregiver) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      avaliacoesApi.getByCuidador(payload.sub)
+        .then((list: Avaliacao[]) => {
+          if (list.length > 0) {
+            setAvaliacaoMedia(list.reduce((s, a) => s + a.nota, 0) / list.length);
+          }
+        })
+        .catch(() => {});
+    } catch {}
+  }, [isCaregiver]);
 
   const handleUpdateStatus = async (id: string, status: Reserva['status']) => {
     setUpdatingStatus(id);
@@ -1100,7 +1123,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   const SidebarContent = ({ expanded, onClose }: { expanded: boolean; onClose?: () => void }) => (
     <>
       {/* Logo + toggle */}
-      <div className={`h-16 flex items-center border-b flex-shrink-0 ${expanded ? 'px-5 gap-2' : 'justify-center'}`}>
+      <div className={`h-16 flex items-center border-b border-orange-200 flex-shrink-0 ${expanded ? 'px-5 gap-2' : 'justify-center'}`}>
         {expanded && (
           <>
             <PawPrint className="w-7 h-7 text-orange-500 flex-shrink-0" />
@@ -1122,12 +1145,12 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             key={item.id}
             onClick={() => handleTabChange(item.id)}
             title={!expanded ? item.label : undefined}
-            className={`w-full flex items-center rounded-lg transition-colors ${
+            className={`w-full flex items-center rounded-lg transition-all ${
               expanded ? 'gap-3 px-4 py-3' : 'justify-center px-0 py-3'
             } ${
               activeTab === item.id
-                ? 'bg-orange-50 text-orange-600'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-sm'
+                : 'text-gray-600 hover:bg-orange-50 hover:text-orange-500 border border-transparent'
             }`}
           >
             <item.icon className="w-5 h-5 flex-shrink-0" />
@@ -1136,7 +1159,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
         ))}
       </nav>
 
-      <div className="p-2 border-t">
+      <div className="p-2 border-t border-orange-200">
         <button
           onClick={handleLogout}
           title={!expanded ? 'Sair' : undefined}
@@ -1164,7 +1187,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
 
       {/* Mobile sidebar — overlay deslizante */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r flex flex-col shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-orange-200 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -1173,7 +1196,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
 
       {/* Desktop sidebar — colapsável inline */}
       <aside
-        className={`hidden lg:flex flex-col bg-white border-r transition-all duration-300 ease-in-out ${
+        className={`hidden lg:flex flex-col bg-white border-r border-orange-200 transition-all duration-300 ease-in-out ${
           sidebarOpen ? 'w-64' : 'w-16'
         }`}
       >
@@ -1183,7 +1206,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Header */}
-        <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-8 gap-3">
+        <header className="h-16 bg-white border-b border-orange-200 flex items-center justify-between px-4 md:px-8 gap-3">
           {/* Hamburger — só no mobile */}
           <button
             onClick={() => setMobileSidebarOpen(true)}
@@ -1196,7 +1219,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               placeholder="Buscar cuidadores, serviços..."
-              className="pl-10 bg-gray-50 border-none"
+              className="pl-10 bg-orange-50 border border-orange-200 focus:border-orange-400 focus:ring-orange-200"
             />
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -1467,14 +1490,15 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { label: 'Reservas Ativas', value: '3', color: 'blue' },
-                { label: 'Pets Cadastrados', value: '2', color: 'orange' },
-                { label: 'Mensagens Novas', value: '12', color: 'green' },
-                { label: 'Avaliações', value: '4.9', color: 'yellow' },
+                { label: 'Total de Reservas', value: reservas.length > 0 ? String(reservas.length) : '—' },
+                { label: 'Pets Cadastrados', value: '—' },
+                { label: 'Mensagens Novas', value: '—' },
+                { label: 'Avaliação Média', value: avaliacaoMedia !== null ? avaliacaoMedia.toFixed(1) : '—' },
               ].map((stat, i) => (
-                <Card key={i} className="p-6 border-none shadow-sm hover:shadow-md transition-shadow">
+                <Card key={i} className="p-6 border-orange-200 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-400 to-amber-400 rounded-t-xl" />
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-800 mt-2">{stat.value}</p>
+                  <p className="text-3xl font-bold text-orange-500 mt-2">{stat.value}</p>
                 </Card>
               ))}
             </div>
@@ -1515,35 +1539,73 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
               <div className="lg:col-span-2 space-y-4">
                 <h3 className="text-xl font-bold text-gray-800">Reservas Recentes</h3>
                 <Card className="divide-y border-none shadow-sm">
-                  {[1, 2, 3].map((item) => (
-                    <div key={item} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
-                          <PawPrint className="w-6 h-6 text-orange-400" />
+                  {(() => {
+                    const twoWeeksAgo = new Date();
+                    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                    const recentes = reservas.filter((r) => new Date(r.dataEntrada) >= twoWeeksAgo || new Date(r.dataSaida) >= twoWeeksAgo);
+                    if (recentes.length === 0) {
+                      return (
+                        <div className="p-8 text-center text-gray-400 text-sm">
+                          Nenhuma reserva nas últimas 2 semanas.
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-800">Max (Golden Retriever)</p>
-                          <p className="text-sm text-gray-500">Cuidadora: Ana Silva • 15 Out - 18 Out</p>
+                      );
+                    }
+                    return recentes.map((r) => {
+                      const statusColors: Record<string, string> = {
+                        'Em análise': 'bg-yellow-100 text-yellow-700',
+                        'Aceita': 'bg-green-100 text-green-700',
+                        'Recusada': 'bg-red-100 text-red-700',
+                        'Concluida': 'bg-blue-100 text-blue-700',
+                      };
+                      return (
+                        <div key={r.id} className="p-4 flex items-center justify-between hover:bg-orange-50 transition-colors border-l-4 border-l-orange-400 first:rounded-tl-xl last:rounded-bl-xl">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                              <PawPrint className="w-6 h-6 text-orange-400" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-800">{r.nomePet} ({r.especie})</p>
+                              <p className="text-sm text-gray-500">
+                                {isCaregiver ? r.donoNome : r.cuidadorNome} • {new Date(r.dataEntrada).toLocaleDateString('pt-BR')} - {new Date(r.dataSaida).toLocaleDateString('pt-BR')}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 text-xs font-bold rounded-full ${statusColors[r.status] ?? 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
                         </div>
-                      </div>
-                      <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Confirmado</span>
-                    </div>
-                  ))}
+                      );
+                    });
+                  })()}
                 </Card>
               </div>
 
               {/* Tips / Suggestions */}
               <div className="space-y-4">
-                <h3 className="text-xl font-bold text-gray-800">Dicas para você</h3>
-                <Card className="p-6 bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none">
-                  <h4 className="font-bold text-lg mb-2">Complete seu perfil!</h4>
-                  <p className="text-orange-50 text-sm mb-4">
-                    Perfis completos têm 3x mais chances de encontrar cuidadores ideais.
-                  </p>
-                  <Button variant="secondary" className="w-full text-orange-600 font-bold">
-                    Editar Perfil
-                  </Button>
-                </Card>
+                <h3 className="text-xl font-bold text-gray-800">
+                  {isCaregiver ? 'Seu Desempenho' : 'Dicas para você'}
+                </h3>
+                {isCaregiver && avaliacaoMedia !== null ? (
+                  <Card className="p-6 border-none shadow-sm">
+                    <p className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Avaliação Média</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-5xl font-bold text-orange-500">{avaliacaoMedia.toFixed(1)}</span>
+                      <div className="flex gap-0.5">
+                        {[1,2,3,4,5].map((s) => (
+                          <Star key={s} className={`w-5 h-5 ${s <= Math.round(avaliacaoMedia) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
+                        ))}
+                      </div>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-6 bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none">
+                    <h4 className="font-bold text-lg mb-2">Complete seu perfil!</h4>
+                    <p className="text-orange-50 text-sm mb-4">
+                      Perfis completos têm 3x mais chances de encontrar cuidadores ideais.
+                    </p>
+                    <Button variant="secondary" className="w-full text-orange-600 font-bold">
+                      Editar Perfil
+                    </Button>
+                  </Card>
+                )}
               </div>
             </div>
           </div>
