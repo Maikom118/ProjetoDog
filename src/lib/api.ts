@@ -123,9 +123,12 @@ export interface Reserva {
   dataEntrada: string;
   dataSaida: string;
   valorTotal: number;
-  status: 'Em análise' | 'Aceita' | 'Recusada' | 'Concluida';
+  status: 'Em análise' | 'Aceita' | 'Recusada' | 'Finalizada';
   cuidadorNome?: string;
+  cuidadorTelefone?: string;
   donoNome?: string;
+  donoConfirmouFinalizacao?: boolean;
+  cuidadorConfirmouFinalizacao?: boolean;
 }
 
 export interface CreateReservaRequest {
@@ -147,6 +150,8 @@ export const reservasApi = {
     apiRequest<Reserva[]>('/api/reservas', 'GET'),
   updateStatus: (id: string, status: Reserva['status']) =>
     apiRequest<Reserva>(`/api/reservas/${id}/status`, 'PATCH', { novoStatus: status }),
+  finalizar: (id: string) =>
+    apiRequest<Reserva>(`/api/Reservas/${id}/finalizar`, 'PATCH'),
 };
 
 export interface Avaliacao {

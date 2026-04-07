@@ -1011,6 +1011,8 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [reservasLoading, setReservasLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [reservaFiltro, setReservaFiltro] = useState<Reserva['status'] | 'Todas'>('Todas');
+  const [reservaOrdem, setReservaOrdem] = useState<Reserva['status'] | 'valor-asc' | 'valor-desc'>('Em análise');
   const [avaliacaoMedia, setAvaliacaoMedia] = useState<number | null>(null);
   const [avaliacaoModal, setAvaliacaoModal] = useState<{ reservaId: string; cuidadorId: string } | null>(null);
   const [avaliacaoNota, setAvaliacaoNota] = useState(5);
@@ -1035,16 +1037,30 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
       .catch(() => {});
   }, [isCaregiver]);
 
+  const loadReservas = async () => {
+    const lista = await reservasApi.getAll();
+    if (!isCaregiver && lista.length > 0) {
+      const todosCuidadores = await cuidadoresApi.getAll().catch(() => []);
+      const nomeMap: Record<string, string> = {};
+      const telMap: Record<string, string> = {};
+      todosCuidadores.forEach((c) => { nomeMap[c.id] = c.nome; telMap[c.id] = c.telefone; });
+      return lista.map((r) => ({
+        ...r,
+        cuidadorNome: r.cuidadorNome || nomeMap[r.cuidadorId] || '—',
+        cuidadorTelefone: r.cuidadorTelefone || telMap[r.cuidadorId] || '',
+      }));
+    }
+    return lista;
+  };
+
   useEffect(() => {
-    reservasApi.getAll()
-      .then(setReservas)
-      .catch(() => {});
+    loadReservas().then(setReservas).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (activeTab === 'bookings' && reservas.length === 0) {
       setReservasLoading(true);
-      reservasApi.getAll()
+      loadReservas()
         .then(setReservas)
         .catch(() => toast.error('Erro ao carregar reservas'))
         .finally(() => setReservasLoading(false));
@@ -1072,10 +1088,27 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
     try {
       await reservasApi.updateStatus(id, status);
       setReservas((prev) => prev.map((r) => r.id === id ? { ...r, status } : r));
-      const msg = status === 'Aceita' ? 'Reserva aceita!' : status === 'Concluida' ? 'Reserva concluída!' : 'Reserva recusada.';
+      const msg = status === 'Aceita' ? 'Reserva aceita!' : status === 'Finalizada' ? 'Reserva finalizada!' : 'Reserva recusada.';
       toast.success(msg);
     } catch {
       toast.error('Erro ao atualizar status da reserva');
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleFinalizar = async (id: string) => {
+    setUpdatingStatus(id);
+    try {
+      const updated = await reservasApi.finalizar(id);
+      setReservas((prev) => prev.map((r) => r.id === id ? { ...r, ...updated } : r));
+      if (updated.status === 'Finalizada') {
+        toast.success('Reserva concluída por ambas as partes!');
+      } else {
+        toast.success('Finalização confirmada! Aguardando a outra parte.');
+      }
+    } catch {
+      toast.error('Erro ao finalizar reserva');
     } finally {
       setUpdatingStatus(null);
     }
@@ -1266,12 +1299,51 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                     {isCaregiver ? 'Gerencie as solicitações dos donos de pets' : 'Acompanhe o status das suas reservas'}
                   </p>
                 </div>
-                {!reservasLoading && reservas.length > 0 && (
-                  <span className="bg-orange-100 text-orange-600 font-bold text-sm px-4 py-2 rounded-full">
-                    {reservas.length} reserva{reservas.length !== 1 ? 's' : ''}
-                  </span>
-                )}
+                <button
+                  onClick={() => {
+                    setReservasLoading(true);
+                    loadReservas()
+                      .then(setReservas)
+                      .catch(() => toast.error('Erro ao atualizar reservas'))
+                      .finally(() => setReservasLoading(false));
+                  }}
+                  disabled={reservasLoading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-orange-200 text-orange-500 font-semibold text-sm hover:bg-orange-50 disabled:opacity-40 transition-colors shadow-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 ${reservasLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Atualizar
+                </button>
               </div>
+
+              {/* Filtros */}
+              {reservas.length > 0 && (() => {
+                const filtros: { label: string; value: Reserva['status'] | 'Todas'; cor: string }[] = [
+                  { label: 'Todas', value: 'Todas', cor: reservaFiltro === 'Todas' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200' },
+                  { label: 'Em análise', value: 'Em análise', cor: reservaFiltro === 'Em análise' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200' },
+                  { label: 'Aceita', value: 'Aceita', cor: reservaFiltro === 'Aceita' ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200' },
+                  { label: 'Recusada', value: 'Recusada', cor: reservaFiltro === 'Recusada' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-700 border border-red-200' },
+                  { label: 'Finalizada', value: 'Finalizada', cor: reservaFiltro === 'Finalizada' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+                ];
+                return (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {filtros.map((f) => {
+                      const count = f.value === 'Todas' ? reservas.length : reservas.filter((r) => r.status === f.value).length;
+                      if (f.value !== 'Todas' && count === 0) return null;
+                      return (
+                        <button
+                          key={f.value}
+                          onClick={() => setReservaFiltro(f.value)}
+                          className={`px-4 py-2 rounded-full font-semibold text-sm transition-colors shadow-sm ${f.cor}`}
+                        >
+                          {f.label} <span className="opacity-70 ml-1">({count})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {reservasLoading && (
                 <div className="flex items-center justify-center py-20 text-gray-400">
@@ -1294,7 +1366,39 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                 </div>
               )}
 
-              {!reservasLoading && reservas.map((r) => {
+              {/* Ordenação */}
+              {reservas.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Ordenar por:</span>
+                  {([
+                    { label: 'Em análise', value: 'Em análise', ativo: 'bg-amber-500 text-white', inativo: 'bg-white text-amber-600 border border-amber-200 hover:bg-amber-50' },
+                    { label: 'Aceita', value: 'Aceita', ativo: 'bg-blue-500 text-white', inativo: 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-50' },
+                    { label: 'Recusada', value: 'Recusada', ativo: 'bg-red-500 text-white', inativo: 'bg-white text-red-500 border border-red-200 hover:bg-red-50' },
+                    { label: 'Finalizada', value: 'Finalizada', ativo: 'bg-emerald-500 text-white', inativo: 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50' },
+                    { label: 'Valor ↑', value: 'valor-asc', ativo: 'bg-orange-500 text-white', inativo: 'bg-white text-gray-500 border border-gray-200 hover:bg-orange-50' },
+                    { label: 'Valor ↓', value: 'valor-desc', ativo: 'bg-orange-500 text-white', inativo: 'bg-white text-gray-500 border border-gray-200 hover:bg-orange-50' },
+                  ] as { label: string; value: typeof reservaOrdem; ativo: string; inativo: string }[]).map((o) => (
+                    <button
+                      key={o.value}
+                      onClick={() => setReservaOrdem(o.value)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${reservaOrdem === o.value ? o.ativo : o.inativo}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!reservasLoading && [...reservas]
+                .filter((r) => reservaFiltro === 'Todas' || r.status === reservaFiltro)
+                .sort((a, b) => {
+                  if (reservaOrdem === 'valor-asc') return a.valorTotal - b.valorTotal;
+                  if (reservaOrdem === 'valor-desc') return b.valorTotal - a.valorTotal;
+                  if (a.status === reservaOrdem && b.status !== reservaOrdem) return -1;
+                  if (b.status === reservaOrdem && a.status !== reservaOrdem) return 1;
+                  return 0;
+                })
+                .map((r) => {
                 const entrada = new Date(r.dataEntrada);
                 const saida = new Date(r.dataSaida);
                 const dias = Math.max(1, Math.ceil((saida.getTime() - entrada.getTime()) / (1000 * 60 * 60 * 24)));
@@ -1303,12 +1407,14 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
 
                 const isPendente = r.status === 'Em análise';
                 const isAceito   = r.status === 'Aceita';
+                const jaCuidadorFinalizou = r.cuidadorConfirmouFinalizacao ?? false;
+                const jaDonoFinalizou     = r.donoConfirmouFinalizacao ?? false;
 
                 const gradients = {
                   'Em análise': 'from-amber-400 via-orange-400 to-amber-500',
-                  Aceita:    'from-emerald-500 via-green-500 to-teal-500',
+                  Aceita:    'from-blue-400 via-blue-500 to-indigo-500',
                   Recusada:  'from-red-400 via-rose-500 to-red-500',
-                  Concluida: 'from-blue-500 via-indigo-500 to-purple-500',
+                  Finalizada: 'from-emerald-500 via-green-500 to-teal-500',
                 };
                 const gradient = gradients[r.status] ?? gradients['Em análise'];
 
@@ -1337,6 +1443,9 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                               <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{r.especie}</span>
                               <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{porteLabel}</span>
                             </div>
+                            {!isCaregiver && (
+                              <p className="text-white/80 text-sm font-semibold mt-2">👤 {r.cuidadorNome ?? 'Cuidador'}</p>
+                            )}
                           </div>
                         </div>
 
@@ -1377,14 +1486,14 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                       </div>
 
                       {/* Pessoa relacionada */}
-                      {!isCaregiver && r.cuidadorNome && (
+                      {!isCaregiver && (
                         <div className="flex items-center gap-4 p-4 bg-orange-50 rounded-2xl border border-orange-100">
                           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-extrabold text-lg flex-shrink-0 shadow-sm">
-                            {r.cuidadorNome.charAt(0).toUpperCase()}
+                            {(r.cuidadorNome ?? 'C').charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <p className="text-xs text-orange-500 font-bold uppercase tracking-wider">Cuidador responsável</p>
-                            <p className="text-base font-extrabold text-gray-800 mt-0.5">{r.cuidadorNome}</p>
+                            <p className="text-base font-extrabold text-gray-800 mt-0.5">{r.cuidadorNome ?? '—'}</p>
                           </div>
                         </div>
                       )}
@@ -1424,6 +1533,20 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                           <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Valor total estimado</p>
                           <p className="text-3xl font-extrabold text-orange-500 mt-1">R$ {r.valorTotal.toFixed(2)}</p>
                           <p className="text-xs text-gray-400 mt-0.5">{dias} dia{dias !== 1 ? 's' : ''} × R$ {(r.valorTotal / dias).toFixed(2)}/dia</p>
+                          {!isCaregiver && r.cuidadorTelefone && (
+                            <a
+                              href={`https://wa.me/55${r.cuidadorTelefone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white font-bold text-sm transition-colors shadow-sm"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.852L.057 23.55a.75.75 0 00.921.921l5.696-1.475A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.693-.497-5.241-1.367l-.375-.214-3.882 1.005 1.033-3.772-.234-.389A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                              </svg>
+                              WhatsApp
+                            </a>
+                          )}
                         </div>
 
                         {isCaregiver && isPendente && (
@@ -1444,16 +1567,33 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                             </button>
                           </div>
                         )}
-                        {!isCaregiver && isAceito && (
+                        {isCaregiver && isAceito && (
                           <button
-                            onClick={() => handleUpdateStatus(r.id, 'Concluida')}
-                            disabled={updatingStatus === r.id}
-                            className="px-6 py-3 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm disabled:opacity-40 transition-colors shadow-md"
+                            onClick={() => !jaCuidadorFinalizou && handleFinalizar(r.id)}
+                            disabled={updatingStatus === r.id || jaCuidadorFinalizou}
+                            className={`px-6 py-3 rounded-2xl font-bold text-sm transition-colors shadow-md ${
+                              jaCuidadorFinalizou
+                                ? 'bg-emerald-500 text-white cursor-not-allowed'
+                                : 'bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40'
+                            }`}
                           >
-                            {updatingStatus === r.id ? '...' : '✓ Concluir'}
+                            {updatingStatus === r.id ? '...' : jaCuidadorFinalizou ? '✓ Finalizado' : '✓ Finalizar'}
                           </button>
                         )}
-                        {!isCaregiver && (r.status === 'Concluida' || r.status === 'Aceita') && (
+                        {!isCaregiver && isAceito && (
+                          <button
+                            onClick={() => !jaDonoFinalizou && handleFinalizar(r.id)}
+                            disabled={updatingStatus === r.id || jaDonoFinalizou}
+                            className={`px-6 py-3 rounded-2xl font-bold text-sm transition-colors shadow-md ${
+                              jaDonoFinalizou
+                                ? 'bg-emerald-500 text-white cursor-not-allowed'
+                                : 'bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40'
+                            }`}
+                          >
+                            {updatingStatus === r.id ? '...' : jaDonoFinalizou ? '✓ Finalizado' : '✓ Finalizar'}
+                          </button>
+                        )}
+                        {!isCaregiver && r.status === 'Finalizada' && (
                           <button
                             onClick={() => setAvaliacaoModal({ reservaId: r.id, cuidadorId: r.cuidadorId })}
                             className="px-6 py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-colors shadow-md"
@@ -1553,9 +1693,9 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                     return recentes.map((r) => {
                       const statusColors: Record<string, string> = {
                         'Em análise': 'bg-yellow-100 text-yellow-700',
-                        'Aceita': 'bg-green-100 text-green-700',
+                        'Aceita': 'bg-blue-100 text-blue-700',
                         'Recusada': 'bg-red-100 text-red-700',
-                        'Concluida': 'bg-blue-100 text-blue-700',
+                        'Finalizada': 'bg-emerald-100 text-emerald-700',
                       };
                       return (
                         <div key={r.id} className="p-4 flex items-center justify-between hover:bg-orange-50 transition-colors border-l-4 border-l-orange-400 first:rounded-tl-xl last:rounded-bl-xl">
