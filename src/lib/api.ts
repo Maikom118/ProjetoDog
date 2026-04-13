@@ -2,7 +2,7 @@ const BASE_URL = 'https://pets-api.delo.dev.br';
 
 export async function apiRequest<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' = 'GET',
   body?: any,
   headers: Record<string, string> = {}
 ): Promise<T> {
@@ -62,12 +62,38 @@ export interface Cuidador {
   email: string;
   especialidades: string[];
   bio: string;
+  fotoUrl?: string;
   distanciaKm?: number;
+}
+
+export interface UpdateCuidadorRequest {
+  nome: string;
+  telefone: string;
+  bio: string;
+  hourlyRate: number;
+  especialidades: string[];
 }
 
 export const cuidadoresApi = {
   getAll: () => apiRequest<Cuidador[]>('/api/Cuidadores', 'GET'),
   getById: (id: string) => apiRequest<Cuidador>(`/api/Cuidadores/${id}`, 'GET'),
+  updateProfile: (data: UpdateCuidadorRequest) =>
+    apiRequest<Cuidador>('/api/Cuidadores/meu-perfil', 'PUT', data),
+  uploadFoto: async (file: File): Promise<{ fotoUrl?: string }> => {
+    const token = localStorage.getItem('token');
+    const form = new FormData();
+    form.append('arquivo', file);
+    const response = await fetch(`${BASE_URL}/api/Cuidadores/upload-foto`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || err.title || `HTTP ${response.status}`);
+    }
+    return response.status === 204 ? {} : response.json();
+  },
 };
 
 export interface MatchRequest {
@@ -81,4 +107,82 @@ export interface MatchRequest {
 export const matchApi = {
   encontrarCuidador: (data: MatchRequest) =>
     apiRequest<Cuidador[]>('/api/Match/encontrar-cuidador', 'POST', data),
+};
+
+// ─── Reservas ────────────────────────────────────────────────────────────────
+
+export interface Reserva {
+  id: string;
+  cuidadorId: string;
+  donoId?: string;
+  nomePet: string;
+  especie: string;
+  porte: string;
+  cuidadosEspeciais: string;
+  descricaoPet: string;
+  dataEntrada: string;
+  dataSaida: string;
+  valorTotal: number;
+  status: 'Em análise' | 'Aceita' | 'Recusada' | 'Finalizada';
+  cuidadorNome?: string;
+  cuidadorTelefone?: string;
+  donoNome?: string;
+  donoConfirmouFinalizacao?: boolean;
+  cuidadorConfirmouFinalizacao?: boolean;
+}
+
+export interface CreateReservaRequest {
+  cuidadorId: string;
+  nomePet: string;
+  especie: string;
+  porte: string;
+  cuidadosEspeciais: string;
+  descricaoPet: string;
+  dataEntrada: string;
+  dataSaida: string;
+  valorTotal: number;
+}
+
+export const reservasApi = {
+  create: (data: CreateReservaRequest) =>
+    apiRequest<Reserva>('/api/reservas', 'POST', data),
+  getAll: () =>
+    apiRequest<Reserva[]>('/api/reservas', 'GET'),
+  updateStatus: (id: string, status: Reserva['status']) =>
+    apiRequest<Reserva>(`/api/reservas/${id}/status`, 'PATCH', { novoStatus: status }),
+  finalizar: (id: string) =>
+    apiRequest<Reserva>(`/api/Reservas/${id}/finalizar`, 'PATCH'),
+};
+
+export interface Avaliacao {
+  id: string;
+  nota: number;
+  comentario: string;
+  fotoUrl: string | null;
+  nomeDono: string;
+  dataCriacao: string;
+}
+
+export const avaliacoesApi = {
+  getByCuidador: (cuidadorId: string) =>
+    apiRequest<Avaliacao[]>(`/api/Avaliacoes/cuidador/${cuidadorId}`, 'GET'),
+  create: async (cuidadorId: string, nota: number, comentario: string, foto?: File) => {
+    const token = localStorage.getItem('token');
+    const form = new FormData();
+    form.append('Nota', String(nota));
+    form.append('Comentario', comentario);
+    if (foto) form.append('Foto', foto);
+
+    const response = await fetch(`https://pets-api.delo.dev.br/api/Avaliacoes/${cuidadorId}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || err.title || `HTTP ${response.status}`);
+    }
+    return response.status === 204 ? {} : response.json();
+  },
 };
