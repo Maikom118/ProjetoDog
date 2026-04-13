@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Cuidador } from '../../lib/api';
+import { Avaliacao, Cuidador, UpdateCuidadorRequest, avaliacoesApi, cuidadoresApi, reservasApi } from '../../lib/api';
+import { Edit2, Upload } from 'lucide-react';
+import { getPetData, StoredPetData } from '../../lib/chatStorage';
 import {
   ArrowLeft,
   MapPin,
@@ -18,6 +20,8 @@ import {
   PawPrint,
   Smile,
   ExternalLink,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -115,8 +119,116 @@ const WHAT_INCLUDED = [
   'Relatório diário do pet',
 ];
 
+function getCurrentUserId(): string | null {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
   const [mapError, setMapError] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [petData, setPetData] = useState<StoredPetData | null>(null);
+  const [editData, setEditData] = useState<StoredPetData | null>(null);
+
+  // Edit profile
+  const isOwnProfile = getCurrentUserId() === cuidador.id;
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [profileData, setProfileData] = useState<UpdateCuidadorRequest>({
+    nome: cuidador.nome ?? '',
+    telefone: cuidador.telefone ?? '',
+    bio: cuidador.bio ?? '',
+    hourlyRate: cuidador.valorDiaria ?? 0,
+    especialidades: cuidador.especialidades ?? [],
+  });
+  const [especialidadesInput, setEspecialidadesInput] = useState(
+    (cuidador.especialidades ?? []).join(', ')
+  );
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [currentCuidador, setCurrentCuidador] = useState(cuidador);
+  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
+
+  useEffect(() => {
+    avaliacoesApi.getByCuidador(cuidador.id).then(setAvaliacoes).catch(() => {});
+  }, [cuidador.id]);
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const esp = especialidadesInput
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const updated = await cuidadoresApi.updateProfile({ ...profileData, especialidades: esp });
+      setCurrentCuidador((prev) => ({ ...prev, ...updated }));
+      toast.success('Perfil atualizado com sucesso!');
+      setShowEditModal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar perfil');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleUploadFoto = async (file: File) => {
+    setUploadingFoto(true);
+    try {
+      const res = await cuidadoresApi.uploadFoto(file);
+      if (res.fotoUrl) setCurrentCuidador((prev) => ({ ...prev, fotoUrl: res.fotoUrl }));
+      toast.success('Foto atualizada!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar foto');
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
+
+  const handleSolicitarOrcamento = () => {
+    const data = getPetData();
+    setPetData(data);
+    setEditData(data ? { ...data } : null);
+    setShowModal(true);
+  };
+
+  const updateEdit = (field: keyof StoredPetData, value: string | null) =>
+    setEditData((prev) => prev ? { ...prev, [field]: value } : prev);
+
+  const calcDays = (entrada: string, saida: string) =>
+    Math.max(1, Math.ceil((new Date(saida).getTime() - new Date(entrada).getTime()) / (1000 * 60 * 60 * 24)));
+
+  const handleConfirmar = async () => {
+    if (!editData?.dataEntrada || !editData?.dataSaida) return;
+    const dias = calcDays(editData.dataEntrada, editData.dataSaida);
+    const valorTotal = dias * cuidador.valorDiaria;
+    setSubmitting(true);
+    try {
+      await reservasApi.create({
+        cuidadorId: cuidador.id,
+        nomePet: editData.petName,
+        especie: editData.petType,
+        porte: editData.petSize,
+        cuidadosEspeciais: editData.specialCareDesc,
+        descricaoPet: editData.petBehavior,
+        dataEntrada: editData.dataEntrada,
+        dataSaida: editData.dataSaida,
+        valorTotal,
+      });
+      setShowModal(false);
+      setShowSuccess(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar reserva');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     window.history.pushState({}, '', `/cuidador/${cuidador.id}`);
@@ -136,9 +248,9 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
     }
   };
 
-  const whatsappUrl = `https://wa.me/55${cuidador.telefone?.replace(/\D/g, '')}`;
-  const mapUrl = cuidador.endereco ? buildMapUrl(cuidador.endereco) : null;
-  const mapsLink = cuidador.endereco ? buildGoogleMapsLink(cuidador.endereco) : null;
+  const whatsappUrl = `https://wa.me/55${currentCuidador.telefone?.replace(/\D/g, '')}`;
+  const mapUrl = currentCuidador.endereco ? buildMapUrl(currentCuidador.endereco) : null;
+  const mapsLink = currentCuidador.endereco ? buildGoogleMapsLink(currentCuidador.endereco) : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -151,13 +263,24 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
           <ArrowLeft className="w-5 h-5" />
           <span className="text-sm font-medium">Voltar aos Cuidadores</span>
         </button>
-        <button
-          onClick={handleShare}
-          className="flex items-center gap-2 text-gray-600 hover:text-orange-500 transition-colors text-sm"
-        >
-          <Share2 className="w-4 h-4" />
-          Compartilhar
-        </button>
+        <div className="flex items-center gap-3">
+          {isOwnProfile && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            >
+              <Edit2 className="w-4 h-4" />
+              Editar Perfil
+            </button>
+          )}
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-2 text-gray-600 hover:text-orange-500 transition-colors text-sm"
+          >
+            <Share2 className="w-4 h-4" />
+            Compartilhar
+          </button>
+        </div>
       </div>
 
       {/* Hero */}
@@ -168,8 +291,36 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
         <div className="relative max-w-4xl mx-auto px-4 py-12">
           <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
             {/* Avatar */}
-            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white text-6xl border-4 border-white/40 shadow-2xl flex-shrink-0">
-              {cuidador.nome?.charAt(0).toUpperCase() || 'C'}
+            <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0">
+              {currentCuidador.fotoUrl ? (
+                <img
+                  src={currentCuidador.fotoUrl}
+                  alt={currentCuidador.nome}
+                  className="w-full h-full rounded-2xl object-cover border-4 border-white/40 shadow-2xl"
+                />
+              ) : (
+                <div className="w-full h-full rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white text-6xl border-4 border-white/40 shadow-2xl">
+                  {currentCuidador.nome?.charAt(0).toUpperCase() || 'C'}
+                </div>
+              )}
+              {isOwnProfile && (
+                <label className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-orange-50 transition-colors">
+                  {uploadingFoto ? (
+                    <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 text-orange-500" />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadFoto(file);
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             <div className="text-center sm:text-left flex-1">
@@ -182,7 +333,11 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                 {[...Array(5)].map((_, i) => (
                   <Star key={i} className="w-5 h-5 fill-yellow-300 text-yellow-300" />
                 ))}
-                <span className="text-orange-100 text-sm ml-1">5.0 (47 avaliações)</span>
+                <span className="text-orange-100 text-sm ml-1">
+                  {avaliacoes.length > 0
+                    ? `${(avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(1)} (${avaliacoes.length} avaliação${avaliacoes.length !== 1 ? 'ões' : ''})`
+                    : 'Sem avaliações'}
+                </span>
               </div>
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-orange-50">
                 {cuidador.endereco?.cidade && (
@@ -211,7 +366,7 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                   WhatsApp
                 </a>
               )}
-              <button className="px-6 py-3 bg-white text-orange-600 rounded-xl font-semibold shadow-lg hover:bg-orange-50 transition-colors">
+              <button onClick={handleSolicitarOrcamento} className="px-6 py-3 bg-white text-orange-600 rounded-xl font-semibold shadow-lg hover:bg-orange-50 transition-colors">
                 Solicitar Orçamento
               </button>
             </div>
@@ -295,39 +450,56 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                 <Star className="w-5 h-5 text-orange-500" />
                 Avaliações
               </h2>
-              <div className="flex items-center gap-3 mb-6 p-4 bg-orange-50 rounded-xl">
-                <div className="text-5xl font-bold text-orange-500">5.0</div>
-                <div>
-                  <div className="flex gap-0.5 mb-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                    ))}
+              {avaliacoes.length > 0 && (
+                <div className="flex items-center gap-3 mb-6 p-4 bg-orange-50 rounded-xl">
+                  <div className="text-5xl font-bold text-orange-500">
+                    {(avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(1)}
                   </div>
-                  <p className="text-sm text-gray-500">47 avaliações verificadas</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {MOCK_REVIEWS.map((review, i) => (
-                  <div key={i} className="p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center text-white font-bold text-sm">
-                          {review.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-800 text-sm">{review.name}</p>
-                          <p className="text-xs text-gray-400">{review.pet} • {review.date}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-0.5">
-                        {[...Array(review.rating)].map((_, s) => (
-                          <Star key={s} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                        ))}
-                      </div>
+                  <div>
+                    <div className="flex gap-0.5 mb-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                      ))}
                     </div>
-                    <p className="text-gray-600 text-sm leading-relaxed">{review.text}</p>
+                    <p className="text-sm text-gray-500">{avaliacoes.length} avaliação{avaliacoes.length !== 1 ? 'ões' : ''} verificada{avaliacoes.length !== 1 ? 's' : ''}</p>
                   </div>
-                ))}
+                </div>
+              )}
+              <div className="space-y-4">
+                {avaliacoes.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">Nenhuma avaliação ainda.</p>
+                ) : (
+                  avaliacoes.map((review) => (
+                    <div key={review.id} className="p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center text-white font-bold text-sm">
+                            {review.nomeDono.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-800 text-sm">{review.nomeDono}</p>
+                            <p className="text-xs text-gray-400">
+                              {new Date(review.dataCriacao).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-0.5">
+                          {[...Array(review.nota)].map((_, s) => (
+                            <Star key={s} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-gray-600 text-sm leading-relaxed">{review.comentario}</p>
+                      {review.fotoUrl && (
+                        <img
+                          src={review.fotoUrl}
+                          alt="Foto da avaliação"
+                          className="mt-3 rounded-xl max-h-48 object-cover"
+                        />
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </section>
 
@@ -420,7 +592,7 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
                     Chamar no WhatsApp
                   </a>
                 )}
-                <button className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold transition-colors shadow-md">
+                <button onClick={handleSolicitarOrcamento} className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold transition-colors shadow-md">
                   <Calendar className="w-5 h-5" />
                   Solicitar Orçamento
                 </button>
@@ -493,12 +665,296 @@ export function CaregiverProfile({ cuidador, onBack }: CaregiverProfileProps) {
               WhatsApp
             </a>
           )}
-          <button className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm">
+          <button onClick={handleSolicitarOrcamento} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm">
             Orçamento
           </button>
         </div>
         <div className="sm:hidden h-20" />
       </div>
+
+      {/* Modal de revisão de reserva */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] overflow-y-auto">
+
+            {/* Header gradiente */}
+            <div className="relative bg-gradient-to-r from-orange-500 via-orange-500 to-amber-400 rounded-t-3xl sm:rounded-t-3xl px-6 pt-6 pb-8 overflow-hidden">
+              <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full" />
+              <div className="absolute -bottom-4 right-16 w-16 h-16 bg-white/10 rounded-full" />
+              <div className="flex items-start justify-between relative">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center text-2xl">
+                    🐾
+                  </div>
+                  <div>
+                    <p className="text-white/80 text-xs font-semibold uppercase tracking-wider">Revisar &amp; Editar</p>
+                    <h2 className="text-white text-xl font-extrabold leading-tight">Solicitação de Reserva</h2>
+                  </div>
+                </div>
+                <button onClick={() => setShowModal(false)} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors">
+                  <X className="w-4 h-4 text-white" />
+                </button>
+              </div>
+              {/* Cuidador pill */}
+              <div className="mt-4 flex items-center gap-2 bg-white/20 backdrop-blur rounded-2xl px-4 py-2 w-fit relative">
+                <div className="w-7 h-7 bg-white/30 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  {cuidador.nome.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-white font-bold text-sm leading-tight">{cuidador.nome}</p>
+                  {cuidador.endereco?.cidade && (
+                    <p className="text-white/70 text-xs">{cuidador.endereco.cidade}, {cuidador.endereco.uf}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {!editData ? (
+              <div className="p-6 text-center py-10 text-gray-500">
+                <PawPrint className="w-10 h-10 text-orange-200 mx-auto mb-3" />
+                <p className="font-semibold">Dados do pet não encontrados</p>
+                <p className="text-sm mt-1">Use o chat para informar os dados do seu pet antes de solicitar um orçamento.</p>
+                <button onClick={() => setShowModal(false)} className="mt-4 px-6 py-2 bg-gray-100 text-gray-600 rounded-xl font-semibold">
+                  Fechar
+                </button>
+              </div>
+            ) : (() => {
+              const dias = editData.dataEntrada && editData.dataSaida
+                ? calcDays(editData.dataEntrada, editData.dataSaida)
+                : 0;
+              const valorTotal = dias * cuidador.valorDiaria;
+              const inputCls = "w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all";
+              const labelCls = "block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5";
+              return (
+                <div className="px-6 pb-6 pt-5 space-y-5">
+
+                  {/* Dados do Pet */}
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-3">
+                      <span className="w-5 h-5 bg-orange-100 rounded-lg flex items-center justify-center text-xs">🐶</span>
+                      Dados do Pet
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className={labelCls}>Nome do pet</label>
+                        <input
+                          className={inputCls}
+                          value={editData.petName}
+                          onChange={(e) => updateEdit('petName', e.target.value)}
+                          placeholder="Ex: Rex"
+                        />
+                      </div>
+                      <div className="relative">
+                        <label className={labelCls}>Espécie</label>
+                        <select
+                          className={inputCls + ' appearance-none pr-8'}
+                          value={editData.petType}
+                          onChange={(e) => updateEdit('petType', e.target.value)}
+                        >
+                          {['Cachorro', 'Gato', 'Pássaro', 'Roedor', 'Réptil', 'Peixe'].map((o) => (
+                            <option key={o}>{o}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 bottom-3 w-3.5 h-3.5 text-orange-400 pointer-events-none" />
+                      </div>
+                      <div className="relative">
+                        <label className={labelCls}>Porte</label>
+                        <select
+                          className={inputCls + ' appearance-none pr-8'}
+                          value={editData.petSize}
+                          onChange={(e) => updateEdit('petSize', e.target.value)}
+                        >
+                          {['Pequeno', 'Médio', 'Grande'].map((o) => (
+                            <option key={o}>{o}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 bottom-3 w-3.5 h-3.5 text-orange-400 pointer-events-none" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelCls}>Cuidados especiais</label>
+                        <textarea
+                          className={inputCls + ' resize-none'}
+                          rows={2}
+                          value={editData.specialCareDesc}
+                          onChange={(e) => updateEdit('specialCareDesc', e.target.value)}
+                          placeholder="Ex: toma remédio às 8h..."
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelCls}>Comportamento</label>
+                        <textarea
+                          className={inputCls + ' resize-none'}
+                          rows={2}
+                          value={editData.petBehavior}
+                          onChange={(e) => updateEdit('petBehavior', e.target.value)}
+                          placeholder="Ex: brincalhão, dócil..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Período */}
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-gray-700 mb-3">
+                      <span className="w-5 h-5 bg-orange-100 rounded-lg flex items-center justify-center text-xs">📅</span>
+                      Período da Estadia
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Entrada</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={editData.dataEntrada?.slice(0, 10) ?? ''}
+                          onChange={(e) => updateEdit('dataEntrada', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Saída</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={editData.dataSaida?.slice(0, 10) ?? ''}
+                          onChange={(e) => updateEdit('dataSaida', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Previsão de valor */}
+                  {dias > 0 && (
+                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500 font-semibold">{dias} dia{dias !== 1 ? 's' : ''} × R$ {cuidador.valorDiaria.toFixed(2)}/dia</span>
+                      </div>
+                      <div className="flex items-end justify-between">
+                        <span className="text-sm font-bold text-gray-600">Total estimado</span>
+                        <span className="text-3xl font-extrabold text-orange-500">R$ {valorTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botões */}
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      onClick={() => setShowModal(false)}
+                      className="flex-1 py-3.5 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleConfirmar}
+                      disabled={submitting || !editData.dataEntrada || !editData.dataSaida || !editData.petName}
+                      className="flex-2 px-8 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-40 text-white rounded-2xl font-bold shadow-lg shadow-orange-200 transition-all"
+                    >
+                      {submitting ? 'Enviando...' : '✓ Confirmar Reserva'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de edição de perfil */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Editar Perfil</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {/* Nome */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Nome</label>
+                <input
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={profileData.nome}
+                  onChange={(e) => setProfileData((p) => ({ ...p, nome: e.target.value }))}
+                />
+              </div>
+              {/* Telefone */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Telefone</label>
+                <input
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={profileData.telefone}
+                  onChange={(e) => setProfileData((p) => ({ ...p, telefone: e.target.value }))}
+                />
+              </div>
+              {/* Valor diária */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Valor por dia (R$)</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={profileData.hourlyRate}
+                  onChange={(e) => setProfileData((p) => ({ ...p, hourlyRate: Number(e.target.value) }))}
+                />
+              </div>
+              {/* Bio */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Bio</label>
+                <textarea
+                  rows={3}
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                  value={profileData.bio}
+                  onChange={(e) => setProfileData((p) => ({ ...p, bio: e.target.value }))}
+                />
+              </div>
+              {/* Especialidades */}
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Especialidades (separadas por vírgula)</label>
+                <input
+                  className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  value={especialidadesInput}
+                  onChange={(e) => setEspecialidadesInput(e.target.value)}
+                  placeholder="Ex: Banho, Tosa, Adestramento"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                disabled={savingProfile}
+                className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white rounded-2xl font-bold transition-colors"
+              >
+                {savingProfile ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup de sucesso */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-9 h-9 text-green-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Solicitação Enviada!</h2>
+            <p className="text-gray-500 text-sm mb-6">O cuidador irá analisar sua solicitação e entrará em contato em breve. Acompanhe o status na aba de Reservas.</p>
+            <button
+              onClick={() => setShowSuccess(false)}
+              className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold transition-colors"
+            >
+              Ok, entendi!
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

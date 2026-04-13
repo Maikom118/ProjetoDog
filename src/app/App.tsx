@@ -21,7 +21,16 @@ function getUserRole(): string | null {
   if (!token) return null;
   try {
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload.role || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || payload.tipo || payload.userType || null;
+    const raw =
+      payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ||
+      payload.role ||
+      payload.roles ||
+      payload.Role ||
+      payload.tipo ||
+      payload.userType ||
+      null;
+    if (Array.isArray(raw)) return raw[0] ?? null;
+    return raw ?? null;
   } catch {
     return null;
   }

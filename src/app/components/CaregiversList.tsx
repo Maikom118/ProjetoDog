@@ -21,6 +21,20 @@ interface CaregiversListProps {
   initialFilters?: CaregiverFilters;
 }
 
+function buildMapUrl(endereco: Cuidador['endereco']): string {
+  const parts = [
+    endereco.logradouro,
+    endereco.numero,
+    endereco.bairro,
+    endereco.cidade,
+    endereco.uf,
+    'Brasil',
+  ]
+    .filter(Boolean)
+    .join(', ');
+  return `https://maps.google.com/maps?q=${encodeURIComponent(parts)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+}
+
 const SORT_OPTIONS = [
   { value: 'name', label: 'Nome (A-Z)' },
   { value: 'price_asc', label: 'Menor preço' },
@@ -36,6 +50,7 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
   const [filterMaxPrice, setFilterMaxPrice] = useState(initialFilters?.maxPrice ?? '');
   const [filterSpecialty, setFilterSpecialty] = useState(initialFilters?.specialty ?? '');
   const [sortBy, setSortBy] = useState('name');
+  const [hoveredMapId, setHoveredMapId] = useState<string | null>(null);
   const bestMatchId = initialFilters?.bestMatchId;
   const petName = initialFilters?.petName;
 
@@ -279,7 +294,27 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: index * 0.06, ease: 'easeOut' }}
                 className={`relative ${isBestMatch ? 'p-[3px] rounded-[20px] bg-gradient-to-br from-orange-400 via-amber-400 to-orange-500' : ''}`}
+                onMouseEnter={() => cuidador.endereco && setHoveredMapId(cuidador.id ?? null)}
+                onMouseLeave={() => setHoveredMapId(null)}
               >
+                {/* Minimap popover */}
+                {hoveredMapId === cuidador.id && cuidador.endereco && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-64 rounded-2xl overflow-hidden shadow-2xl border border-gray-100 bg-white">
+                    <iframe
+                      src={buildMapUrl(cuidador.endereco)}
+                      width="100%"
+                      height="160"
+                      style={{ border: 0 }}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      title={`Mapa - ${cuidador.nome}`}
+                    />
+                    <div className="px-3 py-1.5 text-xs text-gray-500 text-center truncate bg-gray-50 border-t border-gray-100">
+                      {[cuidador.endereco.cidade, cuidador.endereco.uf].filter(Boolean).join(', ')}
+                    </div>
+                  </div>
+                )}
+
                 {/* Badge flutuante acima do card */}
                 {isBestMatch && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold rounded-full shadow-lg whitespace-nowrap">
@@ -291,16 +326,28 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
                   isBestMatch ? 'rounded-[18px] shadow-orange-200 shadow-xl' : ''
                 }`}
               >
-
                 {/* Topo colorido */}
                 <div className={`bg-gradient-to-br ${isBestMatch ? 'from-orange-500 to-amber-400' : 'from-orange-400 to-amber-500'} h-20 relative flex-shrink-0`}>
                   <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
                     <div className="w-16 h-16 rounded-full bg-white p-1 shadow-md">
-                      <div className="w-full h-full rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-2xl font-bold">
-                        {cuidador.nome?.charAt(0).toUpperCase() || 'C'}
-                      </div>
+                      {cuidador.fotoUrl ? (
+                        <img src={cuidador.fotoUrl} alt={cuidador.nome} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-2xl font-bold">
+                          {cuidador.nome?.charAt(0).toUpperCase() || 'C'}
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {/* Badge verificado no canto do card */}
+                  {cuidador.fotoUrl && (
+                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Verificado
+                    </div>
+                  )}
                 </div>
 
                 {/* Conteúdo */}
@@ -328,9 +375,7 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
                     {/* Distância do match */}
                     {distancia != null && (
                       <div className={`inline-flex items-center justify-center gap-1 mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        isBestMatch
-                          ? 'bg-orange-100 text-orange-600'
-                          : 'bg-blue-50 text-blue-600'
+                        isBestMatch ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 text-blue-600'
                       }`}>
                         <Navigation className="w-3 h-3" />
                         {distancia < 1
@@ -352,7 +397,6 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
                   )}
 
                   <div className="mt-auto space-y-3">
-                    {/* Preço */}
                     <div className="flex items-center justify-center gap-1">
                       <DollarSign className="w-4 h-4 text-orange-500" />
                       <span className="text-lg font-bold text-orange-500">
@@ -370,6 +414,16 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
                   </div>
                 </div>
               </div>
+
+              {/* Foto ampliada no hover — abaixo do card */}
+              {hoveredMapId === cuidador.id && cuidador.fotoUrl && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-56 rounded-2xl overflow-hidden shadow-2xl border border-gray-100">
+                  <img src={cuidador.fotoUrl} alt={cuidador.nome} className="w-full h-40 object-cover" />
+                  <div className="px-3 py-1.5 text-xs text-gray-500 text-center bg-white border-t border-gray-100 truncate">
+                    {cuidador.nome}
+                  </div>
+                </div>
+              )}
               </motion.div>
             );
             })}

@@ -21,13 +21,16 @@ import {
   Shield,
   Clock,
   Star,
+  Edit2,
+  Upload,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { toast } from 'sonner';
 import { CaregiverFilters } from '../App';
-import { cuidadoresApi, matchApi } from '../../lib/api';
+import { cuidadoresApi, matchApi, reservasApi, avaliacoesApi, Avaliacao, Reserva, UpdateCuidadorRequest } from '../../lib/api';
+import { getChatStorageKey, savePetDataSnapshot } from '../../lib/chatStorage';
 
 interface ChatMessage {
   id: number;
@@ -36,7 +39,15 @@ interface ChatMessage {
   time: string;
 }
 
-type FlowStep = 'pet_name' | 'pet_type' | 'pet_size' | 'special_care' | 'special_care_desc' | 'pet_behavior';
+type FlowStep =
+  | 'pet_name'
+  | 'pet_type'
+  | 'pet_size'
+  | 'special_care'
+  | 'special_care_desc'
+  | 'pet_behavior'
+  | 'checkin_date'
+  | 'checkout_date';
 
 interface FlowState {
   step: FlowStep;
@@ -45,6 +56,9 @@ interface FlowState {
   petSize?: string;
   specialCare?: boolean;
   specialCareDesc?: string;
+  petBehavior?: string;
+  dataEntrada?: string;
+  dataSaida?: string;
 }
 
 interface PersistedChatState {
@@ -53,9 +67,6 @@ interface PersistedChatState {
   flow: FlowState | null;
   postAction: 'find_caregiver' | null;
 }
-
-const CHAT_STORAGE_PREFIX = 'petconnect-chat-history';
-const CHAT_STORAGE_VERSION = 'v2';
 
 function getUserInfo(): { firstName: string; fullName: string; initials: string } {
   const token = localStorage.getItem('token');
@@ -86,38 +97,8 @@ function getUserFirstName(): string {
   return getUserInfo().firstName;
 }
 
-function getLegacyChatStorageKey(): string {
-  const token = localStorage.getItem('token');
-  if (!token) return `${CHAT_STORAGE_PREFIX}:guest`;
-
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    const userId =
-      payload.sub ||
-      payload.userId ||
-      payload.user_id ||
-      payload.email ||
-      payload.unique_name ||
-      payload.name;
-
-    return `${CHAT_STORAGE_PREFIX}:${String(userId ?? 'guest')}`;
-  } catch {
-    return `${CHAT_STORAGE_PREFIX}:guest`;
-  }
-}
-
-function getChatStorageKey(): string {
-  return `${getLegacyChatStorageKey()}:${CHAT_STORAGE_VERSION}`;
-}
-
 function loadPersistedChatState(): PersistedChatState | null {
   try {
-    const legacyKey = getLegacyChatStorageKey();
-    const legacyRaw = localStorage.getItem(legacyKey);
-    if (legacyRaw) {
-      localStorage.removeItem(legacyKey);
-    }
-
     const raw = localStorage.getItem(getChatStorageKey());
     if (!raw) return null;
 
@@ -152,7 +133,6 @@ function persistChatState(state: PersistedChatState) {
 
 function clearPersistedChatState() {
   try {
-    localStorage.removeItem(getLegacyChatStorageKey());
     localStorage.removeItem(getChatStorageKey());
   } catch {
     // Ignore storage cleanup failures.
@@ -257,10 +237,23 @@ const FLOW_PROMPTS: Record<FlowStep, string[]> = {
     'Perfeito! Só mais uma pergunta! 🌟\n\nComo você descreveria o **jeito de ser do seu pet**? Nos ajuda a encontrar o cuidador mais compatível!',
     'Ufa, última etapa! 🎉\n\nMe conta: como é a **personalidade do seu pet**? Tímido, brincalhão, ansioso? Qualquer detalhe ajuda!',
   ],
+  checkin_date: [
+    '📅 Quando seu pet vai precisar do cuidador? Selecione a **data de entrada**!',
+    '📅 Ótimo! Agora me diz: qual é a **data de entrada** do seu pet?',
+    '📅 Estamos quase lá! Selecione a **data em que o pet chega** ao cuidador.',
+    '📅 Perfeito! Agora escolha a **data de início** da estadia.',
+  ],
+  checkout_date: [
+    '📅 E quando ele volta pra casa? Selecione a **data de saída**!',
+    '📅 Ótimo! Agora me diz a **data de saída** — quando seu pet vai embora.',
+    '📅 Quase pronto! Selecione a **data em que o pet retorna** pra você.',
+    '📅 Última etapa! Quando seu pet volta? Escolha a **data de saída**.',
+  ],
 };
 
 const INPUT_STEPS: FlowStep[] = ['pet_name', 'special_care_desc', 'pet_behavior'];
 const BUTTON_STEPS: FlowStep[] = ['pet_type', 'pet_size', 'special_care'];
+const DATE_STEPS: FlowStep[] = ['checkin_date', 'checkout_date'];
 
 const MAX_LENGTH: Partial<Record<FlowStep, number>> = {
   pet_name: 20,
@@ -317,6 +310,8 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
   const [typing, setTyping] = useState(false);
   const [flow, setFlow] = useState<FlowState | null>(() => persistedStateRef.current?.flow ?? null);
   const [postAction, setPostAction] = useState<'find_caregiver' | null>(() => persistedStateRef.current?.postAction ?? null);
+  const [dateInput, setDateInput] = useState('');
+  const today = new Date().toISOString().split('T')[0];
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -436,12 +431,47 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
     }
 
     if (flow.step === 'pet_behavior') {
-      finishFlow({ ...flow, step: 'pet_behavior' }, trimmed);
+      const next: FlowState = { ...flow, step: 'checkin_date', petBehavior: trimmed };
+      setFlow(next);
+      addBotMessage(pickRandom(FLOW_PROMPTS.checkin_date));
     }
   };
 
-  const finishFlow = async (currentFlow: FlowState, behavior: string) => {
-    const { petName, petType, petSize, specialCareDesc } = currentFlow;
+  function formatDatePtBR(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  const handleDateSubmit = () => {
+    if (!flow || !dateInput) return;
+    const isoDate = new Date(dateInput + 'T12:00:00').toISOString();
+
+    if (flow.step === 'checkin_date') {
+      addUserMessage(`📅 ${formatDatePtBR(dateInput)}`);
+      setDateInput('');
+      setFlow({ ...flow, step: 'checkout_date', dataEntrada: isoDate });
+      addBotMessage(pickRandom(FLOW_PROMPTS.checkout_date));
+    } else if (flow.step === 'checkout_date') {
+      addUserMessage(`📅 ${formatDatePtBR(dateInput)}`);
+      setDateInput('');
+      finishFlow({ ...flow, dataSaida: isoDate });
+    }
+  };
+
+  const finishFlow = async (currentFlow: FlowState) => {
+    const { petName, petType, petSize, specialCareDesc, petBehavior } = currentFlow;
+
+    // Persist pet data before clearing flow so CaregiverProfile can read it
+    savePetDataSnapshot({
+      petName: petName ?? '',
+      petType: petType ?? '',
+      petSize: petSize ?? '',
+      specialCareDesc: specialCareDesc ?? '',
+      petBehavior: petBehavior ?? '',
+      dataEntrada: currentFlow.dataEntrada ?? null,
+      dataSaida: currentFlow.dataSaida ?? null,
+    });
+
     setFlow(null);
 
     const displayName = petName ?? 'seu pet';
@@ -461,7 +491,7 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
       especie:          petType ? stripEmoji(petType) : '',
       porte:            petSize ? stripEmoji(petSize) : '',
       cuidadosEspeciais: specialCareDesc ?? '',
-      descricao:        behavior,
+      descricao:        petBehavior ?? '',
     };
 
     console.log('[Chat] Enviando para /api/Match/encontrar-cuidador:', requestBody);
@@ -674,6 +704,33 @@ function ChatWidget({ onClose, onNavigate }: { onClose: () => void; onNavigate: 
           )}
         </div>
       )}
+
+      {/* Date input — shown for checkin_date, checkout_date */}
+      {flow && DATE_STEPS.includes(flow.step) && !typing && (
+        <div className="px-3 pb-3 pt-2 bg-white rounded-b-2xl border-t border-gray-100">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={dateInput}
+              min={
+                flow.step === 'checkout_date' && flow.dataEntrada
+                  ? flow.dataEntrada.split('T')[0]
+                  : today
+              }
+              onChange={(e) => setDateInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleDateSubmit()}
+              className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-200 outline-none focus:border-orange-400 text-gray-700"
+            />
+            <button
+              onClick={handleDateSubmit}
+              disabled={!dateInput}
+              className="w-8 h-8 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 rounded-lg flex items-center justify-center transition-colors"
+            >
+              <Send className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -705,6 +762,29 @@ function getFullUserProfile() {
 
 function UserProfilePage() {
   const profile = getFullUserProfile();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [profileData, setProfileData] = useState<UpdateCuidadorRequest | null>(null);
+  const [especialidadesInput, setEspecialidadesInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [overrideName, setOverrideName] = useState<string | null>(null);
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!profile) return;
+    const r = profile.role?.toLowerCase();
+    if (r !== 'cuidador' && r !== 'caregiver') return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    cuidadoresApi.getAll()
+      .then((lista) => {
+        const meu = lista.find((c) => c.id === payload.sub);
+        if (meu?.fotoUrl) setFotoUrl(meu.fotoUrl);
+      })
+      .catch(() => {});
+  }, []);
+
   if (!profile) return (
     <div className="flex items-center justify-center h-64 text-gray-400">
       Não foi possível carregar os dados do perfil.
@@ -712,9 +792,59 @@ function UserProfilePage() {
   );
 
   const { fullName, initials, email, role, sessionExpires } = profile;
+  const isCaregiver = role?.toLowerCase() === 'cuidador' || role?.toLowerCase() === 'caregiver';
+
+  const openEditModal = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const payload = JSON.parse(atob(token!.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const todos = await cuidadoresApi.getAll();
+      const cuidador = todos.find((c) => c.id === payload.sub);
+      if (!cuidador) throw new Error('Perfil não encontrado');
+      setProfileData({
+        nome: cuidador.nome ?? '',
+        telefone: cuidador.telefone ?? '',
+        bio: cuidador.bio ?? '',
+        hourlyRate: cuidador.valorDiaria ?? 0,
+        especialidades: cuidador.especialidades ?? [],
+      });
+      setEspecialidadesInput((cuidador.especialidades ?? []).join(', '));
+      setShowEditModal(true);
+    } catch {
+      toast.error('Erro ao carregar dados do perfil');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!profileData) return;
+    setSaving(true);
+    try {
+      const esp = especialidadesInput.split(',').map((s) => s.trim()).filter(Boolean);
+      await cuidadoresApi.updateProfile({ ...profileData, especialidades: esp });
+      setOverrideName(profileData.nome);
+      toast.success('Perfil atualizado com sucesso!');
+      setShowEditModal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar perfil');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUploadFoto = async (file: File) => {
+    setUploadingFoto(true);
+    try {
+      await cuidadoresApi.uploadFoto(file);
+      toast.success('Foto atualizada!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar foto');
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
 
   const infoCards = [
-    { icon: User,   label: 'Nome completo',   value: fullName || '—',  accent: 'bg-blue-50 text-blue-500' },
+    { icon: User,   label: 'Nome completo',   value: overrideName ?? fullName ?? '—',  accent: 'bg-blue-50 text-blue-500' },
     { icon: Mail,   label: 'E-mail',           value: email   || '—',  accent: 'bg-purple-50 text-purple-500' },
     { icon: Shield, label: 'Tipo de conta',    value: role    || '—',  accent: 'bg-orange-50 text-orange-500' },
     {
@@ -753,14 +883,39 @@ function UserProfilePage() {
 
       {/* Avatar sobreposto */}
       <div className="flex flex-col items-center -mt-14 mb-8 relative z-10">
-        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white text-4xl font-bold shadow-xl border-4 border-white ring-4 ring-orange-200">
-          {initials}
+        <div className="relative">
+          {fotoUrl ? (
+            <img src={fotoUrl} alt={overrideName ?? fullName ?? ''} className="w-28 h-28 rounded-full object-cover shadow-xl border-4 border-white ring-4 ring-orange-200" />
+          ) : (
+            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white text-4xl font-bold shadow-xl border-4 border-white ring-4 ring-orange-200">
+              {initials}
+            </div>
+          )}
+          {isCaregiver && (
+            <label className="absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-orange-50 transition-colors border border-orange-100">
+              {uploadingFoto ? (
+                <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4 text-orange-500" />
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadFoto(f); }} />
+            </label>
+          )}
         </div>
-        <h2 className="mt-4 text-2xl font-bold text-gray-800">{fullName || 'Usuário'}</h2>
+        <h2 className="mt-4 text-2xl font-bold text-gray-800">{overrideName ?? fullName ?? 'Usuário'}</h2>
         <span className="mt-2 inline-flex items-center gap-1.5 px-4 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-sm font-semibold shadow-sm capitalize">
           <Shield className="w-3.5 h-3.5" />
           {role || 'Membro'}
         </span>
+        {isCaregiver && (
+          <button
+            onClick={openEditModal}
+            className="mt-4 flex items-center gap-2 px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+          >
+            <Edit2 className="w-4 h-4" />
+            Editar Perfil
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -795,6 +950,48 @@ function UserProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* Modal editar perfil */}
+      {showEditModal && profileData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Editar Perfil</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Nome</label>
+                <input className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={profileData.nome} onChange={(e) => setProfileData((p) => p ? { ...p, nome: e.target.value } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Telefone</label>
+                <input className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={profileData.telefone} onChange={(e) => setProfileData((p) => p ? { ...p, telefone: e.target.value } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Valor por dia (R$)</label>
+                <input type="number" min="0" className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={profileData.hourlyRate} onChange={(e) => setProfileData((p) => p ? { ...p, hourlyRate: Number(e.target.value) } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Bio</label>
+                <textarea rows={3} className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none" value={profileData.bio} onChange={(e) => setProfileData((p) => p ? { ...p, bio: e.target.value } : p)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-orange-500 uppercase tracking-wider mb-1.5">Especialidades (separadas por vírgula)</label>
+                <input className="w-full px-3 py-2.5 bg-orange-50 border border-orange-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" value={especialidadesInput} onChange={(e) => setEspecialidadesInput(e.target.value)} placeholder="Ex: Banho, Tosa, Adestramento" />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button onClick={() => setShowEditModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">Cancelar</button>
+              <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white rounded-2xl font-bold transition-colors">
+                {saving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -811,9 +1008,128 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   // Desktop: sidebar expandida/recolhida. Mobile: sidebar visível/oculta como overlay
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [reservasLoading, setReservasLoading] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [reservaFiltro, setReservaFiltro] = useState<Reserva['status'] | 'Todas'>('Todas');
+  const [reservaOrdem, setReservaOrdem] = useState<Reserva['status'] | 'valor-asc' | 'valor-desc'>('Em análise');
+  const [avaliacaoMedia, setAvaliacaoMedia] = useState<number | null>(null);
+  const [avaliacaoModal, setAvaliacaoModal] = useState<{ reservaId: string; cuidadorId: string } | null>(null);
+  const [avaliacaoNota, setAvaliacaoNota] = useState(5);
+  const [avaliacaoComentario, setAvaliacaoComentario] = useState('');
+  const [avaliacaoFoto, setAvaliacaoFoto] = useState<File | null>(null);
+  const [avaliacaoLoading, setAvaliacaoLoading] = useState(false);
 
   const { firstName, fullName, initials } = getUserInfo();
   const isCaregiver = userRole?.toLowerCase() === 'cuidador' || userRole?.toLowerCase() === 'caregiver';
+  const [headerFotoUrl, setHeaderFotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isCaregiver) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    cuidadoresApi.getAll()
+      .then((lista) => {
+        const meu = lista.find((c) => c.id === payload.sub);
+        if (meu?.fotoUrl) setHeaderFotoUrl(meu.fotoUrl);
+      })
+      .catch(() => {});
+  }, [isCaregiver]);
+
+  const loadReservas = async () => {
+    const lista = await reservasApi.getAll();
+    if (!isCaregiver && lista.length > 0) {
+      const todosCuidadores = await cuidadoresApi.getAll().catch(() => []);
+      const nomeMap: Record<string, string> = {};
+      const telMap: Record<string, string> = {};
+      todosCuidadores.forEach((c) => { nomeMap[c.id] = c.nome; telMap[c.id] = c.telefone; });
+      return lista.map((r) => ({
+        ...r,
+        cuidadorNome: r.cuidadorNome || nomeMap[r.cuidadorId] || '—',
+        cuidadorTelefone: r.cuidadorTelefone || telMap[r.cuidadorId] || '',
+      }));
+    }
+    return lista;
+  };
+
+  useEffect(() => {
+    loadReservas().then(setReservas).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'bookings' && reservas.length === 0) {
+      setReservasLoading(true);
+      loadReservas()
+        .then(setReservas)
+        .catch(() => toast.error('Erro ao carregar reservas'))
+        .finally(() => setReservasLoading(false));
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!isCaregiver) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      avaliacoesApi.getByCuidador(payload.sub)
+        .then((list: Avaliacao[]) => {
+          if (list.length > 0) {
+            setAvaliacaoMedia(list.reduce((s, a) => s + a.nota, 0) / list.length);
+          }
+        })
+        .catch(() => {});
+    } catch {}
+  }, [isCaregiver]);
+
+  const handleUpdateStatus = async (id: string, status: Reserva['status']) => {
+    setUpdatingStatus(id);
+    try {
+      await reservasApi.updateStatus(id, status);
+      setReservas((prev) => prev.map((r) => r.id === id ? { ...r, status } : r));
+      const msg = status === 'Aceita' ? 'Reserva aceita!' : status === 'Finalizada' ? 'Reserva finalizada!' : 'Reserva recusada.';
+      toast.success(msg);
+    } catch {
+      toast.error('Erro ao atualizar status da reserva');
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleFinalizar = async (id: string) => {
+    setUpdatingStatus(id);
+    try {
+      const updated = await reservasApi.finalizar(id);
+      setReservas((prev) => prev.map((r) => r.id === id ? { ...r, ...updated } : r));
+      if (updated.status === 'Finalizada') {
+        toast.success('Reserva concluída por ambas as partes!');
+      } else {
+        toast.success('Finalização confirmada! Aguardando a outra parte.');
+      }
+    } catch {
+      toast.error('Erro ao finalizar reserva');
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleSubmitAvaliacao = async () => {
+    if (!avaliacaoModal) return;
+    setAvaliacaoLoading(true);
+    try {
+      await avaliacoesApi.create(avaliacaoModal.cuidadorId, avaliacaoNota, avaliacaoComentario, avaliacaoFoto ?? undefined);
+      toast.success('Avaliação enviada!');
+      setAvaliacaoModal(null);
+      setAvaliacaoNota(5);
+      setAvaliacaoComentario('');
+      setAvaliacaoFoto(null);
+    } catch {
+      toast.error('Erro ao enviar avaliação');
+    } finally {
+      setAvaliacaoLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     clearPersistedChatState();
@@ -840,7 +1156,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
   const SidebarContent = ({ expanded, onClose }: { expanded: boolean; onClose?: () => void }) => (
     <>
       {/* Logo + toggle */}
-      <div className={`h-16 flex items-center border-b flex-shrink-0 ${expanded ? 'px-5 gap-2' : 'justify-center'}`}>
+      <div className={`h-16 flex items-center border-b border-orange-200 flex-shrink-0 ${expanded ? 'px-5 gap-2' : 'justify-center'}`}>
         {expanded && (
           <>
             <PawPrint className="w-7 h-7 text-orange-500 flex-shrink-0" />
@@ -862,12 +1178,12 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             key={item.id}
             onClick={() => handleTabChange(item.id)}
             title={!expanded ? item.label : undefined}
-            className={`w-full flex items-center rounded-lg transition-colors ${
+            className={`w-full flex items-center rounded-lg transition-all ${
               expanded ? 'gap-3 px-4 py-3' : 'justify-center px-0 py-3'
             } ${
               activeTab === item.id
-                ? 'bg-orange-50 text-orange-600'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-sm'
+                : 'text-gray-600 hover:bg-orange-50 hover:text-orange-500 border border-transparent'
             }`}
           >
             <item.icon className="w-5 h-5 flex-shrink-0" />
@@ -876,7 +1192,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
         ))}
       </nav>
 
-      <div className="p-2 border-t">
+      <div className="p-2 border-t border-orange-200">
         <button
           onClick={handleLogout}
           title={!expanded ? 'Sair' : undefined}
@@ -904,7 +1220,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
 
       {/* Mobile sidebar — overlay deslizante */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r flex flex-col shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-orange-200 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -913,7 +1229,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
 
       {/* Desktop sidebar — colapsável inline */}
       <aside
-        className={`hidden lg:flex flex-col bg-white border-r transition-all duration-300 ease-in-out ${
+        className={`hidden lg:flex flex-col bg-white border-r border-orange-200 transition-all duration-300 ease-in-out ${
           sidebarOpen ? 'w-64' : 'w-16'
         }`}
       >
@@ -923,7 +1239,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Header */}
-        <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-8 gap-3">
+        <header className="h-16 bg-white border-b border-orange-200 flex items-center justify-between px-4 md:px-8 gap-3">
           {/* Hamburger — só no mobile */}
           <button
             onClick={() => setMobileSidebarOpen(true)}
@@ -936,7 +1252,7 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               placeholder="Buscar cuidadores, serviços..."
-              className="pl-10 bg-gray-50 border-none"
+              className="pl-10 bg-orange-50 border border-orange-200 focus:border-orange-400 focus:ring-orange-200"
             />
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -954,19 +1270,346 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
                 <p className="text-sm font-semibold text-gray-800 leading-tight">{fullName || 'Usuário'}</p>
                 <p className="text-xs text-gray-400 leading-tight capitalize">{userRole ?? 'Membro'}</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm border-2 border-orange-200 shadow-sm">
-                {initials}
-              </div>
+              {headerFotoUrl ? (
+                <img src={headerFotoUrl} alt={fullName ?? ''} className="w-10 h-10 rounded-full object-cover border-2 border-orange-200 shadow-sm" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-bold text-sm border-2 border-orange-200 shadow-sm">
+                  {initials}
+                </div>
+              )}
             </button>
           </div>
         </header>
 
         {/* Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-8 bg-orange-50">
           {/* Página de Perfil */}
           {activeTab === 'profile' && <UserProfilePage />}
 
-          {activeTab !== 'profile' && (
+          {/* Aba de Reservas */}
+          {activeTab === 'bookings' && (
+            <div className="space-y-6">
+              {/* Header da aba */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800">
+                    {isCaregiver ? 'Solicitações de Reserva' : 'Minhas Reservas'}
+                  </h1>
+                  <p className="text-gray-500 text-sm mt-1">
+                    {isCaregiver ? 'Gerencie as solicitações dos donos de pets' : 'Acompanhe o status das suas reservas'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setReservasLoading(true);
+                    loadReservas()
+                      .then(setReservas)
+                      .catch(() => toast.error('Erro ao atualizar reservas'))
+                      .finally(() => setReservasLoading(false));
+                  }}
+                  disabled={reservasLoading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-orange-200 text-orange-500 font-semibold text-sm hover:bg-orange-50 disabled:opacity-40 transition-colors shadow-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 ${reservasLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Atualizar
+                </button>
+              </div>
+
+              {/* Filtros */}
+              {reservas.length > 0 && (() => {
+                const filtros: { label: string; value: Reserva['status'] | 'Todas'; cor: string }[] = [
+                  { label: 'Todas', value: 'Todas', cor: reservaFiltro === 'Todas' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200' },
+                  { label: 'Em análise', value: 'Em análise', cor: reservaFiltro === 'Em análise' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200' },
+                  { label: 'Aceita', value: 'Aceita', cor: reservaFiltro === 'Aceita' ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200' },
+                  { label: 'Recusada', value: 'Recusada', cor: reservaFiltro === 'Recusada' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-700 border border-red-200' },
+                  { label: 'Finalizada', value: 'Finalizada', cor: reservaFiltro === 'Finalizada' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+                ];
+                return (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {filtros.map((f) => {
+                      const count = f.value === 'Todas' ? reservas.length : reservas.filter((r) => r.status === f.value).length;
+                      if (f.value !== 'Todas' && count === 0) return null;
+                      return (
+                        <button
+                          key={f.value}
+                          onClick={() => setReservaFiltro(f.value)}
+                          className={`px-4 py-2 rounded-full font-semibold text-sm transition-colors shadow-sm ${f.cor}`}
+                        >
+                          {f.label} <span className="opacity-70 ml-1">({count})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {reservasLoading && (
+                <div className="flex items-center justify-center py-20 text-gray-400">
+                  <div className="w-8 h-8 border-4 border-orange-400 border-t-transparent rounded-full animate-spin mr-3" />
+                  Carregando reservas...
+                </div>
+              )}
+
+              {!reservasLoading && reservas.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-24 text-center">
+                  <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center mb-5">
+                    <Calendar className="w-12 h-12 text-orange-300" />
+                  </div>
+                  <p className="text-xl font-bold text-gray-700">Nenhuma reserva encontrada</p>
+                  <p className="text-sm text-gray-400 mt-2 max-w-xs">
+                    {isCaregiver
+                      ? 'Quando um dono solicitar seus serviços, as reservas aparecerão aqui.'
+                      : 'Use o chat para encontrar um cuidador e faça sua primeira reserva.'}
+                  </p>
+                </div>
+              )}
+
+              {/* Ordenação */}
+              {reservas.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Ordenar por:</span>
+                  {([
+                    { label: 'Em análise', value: 'Em análise', ativo: 'bg-amber-500 text-white', inativo: 'bg-white text-amber-600 border border-amber-200 hover:bg-amber-50' },
+                    { label: 'Aceita', value: 'Aceita', ativo: 'bg-blue-500 text-white', inativo: 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-50' },
+                    { label: 'Recusada', value: 'Recusada', ativo: 'bg-red-500 text-white', inativo: 'bg-white text-red-500 border border-red-200 hover:bg-red-50' },
+                    { label: 'Finalizada', value: 'Finalizada', ativo: 'bg-emerald-500 text-white', inativo: 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50' },
+                    { label: 'Valor ↑', value: 'valor-asc', ativo: 'bg-orange-500 text-white', inativo: 'bg-white text-gray-500 border border-gray-200 hover:bg-orange-50' },
+                    { label: 'Valor ↓', value: 'valor-desc', ativo: 'bg-orange-500 text-white', inativo: 'bg-white text-gray-500 border border-gray-200 hover:bg-orange-50' },
+                  ] as { label: string; value: typeof reservaOrdem; ativo: string; inativo: string }[]).map((o) => (
+                    <button
+                      key={o.value}
+                      onClick={() => setReservaOrdem(o.value)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${reservaOrdem === o.value ? o.ativo : o.inativo}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!reservasLoading && [...reservas]
+                .filter((r) => reservaFiltro === 'Todas' || r.status === reservaFiltro)
+                .sort((a, b) => {
+                  if (reservaOrdem === 'valor-asc') return a.valorTotal - b.valorTotal;
+                  if (reservaOrdem === 'valor-desc') return b.valorTotal - a.valorTotal;
+                  if (a.status === reservaOrdem && b.status !== reservaOrdem) return -1;
+                  if (b.status === reservaOrdem && a.status !== reservaOrdem) return 1;
+                  return 0;
+                })
+                .map((r) => {
+                const entrada = new Date(r.dataEntrada);
+                const saida = new Date(r.dataSaida);
+                const dias = Math.max(1, Math.ceil((saida.getTime() - entrada.getTime()) / (1000 * 60 * 60 * 24)));
+                const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                const fmtShort = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+
+                const isPendente = r.status === 'Em análise';
+                const isAceito   = r.status === 'Aceita';
+                const jaCuidadorFinalizou = r.cuidadorConfirmouFinalizacao ?? false;
+                const jaDonoFinalizou     = r.donoConfirmouFinalizacao ?? false;
+
+                const gradients = {
+                  'Em análise': 'from-amber-400 via-orange-400 to-amber-500',
+                  Aceita:    'from-blue-400 via-blue-500 to-indigo-500',
+                  Recusada:  'from-red-400 via-rose-500 to-red-500',
+                  Finalizada: 'from-emerald-500 via-green-500 to-teal-500',
+                };
+                const gradient = gradients[r.status] ?? gradients['Em análise'];
+
+                const speciesEmoji = r.especie?.toLowerCase().includes('gato') ? '🐱' : '🐶';
+                const porteLabel = r.porte === 'Pequeno' ? 'Pequeno porte' : r.porte === 'Médio' ? 'Médio porte' : r.porte === 'Grande' ? 'Grande porte' : r.porte;
+
+                return (
+                  <div key={r.id} className="rounded-3xl overflow-hidden shadow-lg border border-orange-200 bg-white">
+
+                    {/* ── Hero do card ── */}
+                    <div className={`relative bg-gradient-to-r ${gradient} px-8 py-7 overflow-hidden`}>
+                      {/* Decoração de fundo */}
+                      <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/10 rounded-full" />
+                      <div className="absolute -bottom-6 right-24 w-24 h-24 bg-white/10 rounded-full" />
+
+                      <div className="relative flex items-center justify-between gap-4">
+                        {/* Avatar + identidade */}
+                        <div className="flex items-center gap-5">
+                          <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-5xl shadow-md flex-shrink-0">
+                            {speciesEmoji}
+                          </div>
+                          <div>
+                            <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">Pet</p>
+                            <p className="text-white text-3xl font-extrabold leading-tight">{r.nomePet}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{r.especie}</span>
+                              <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{porteLabel}</span>
+                            </div>
+                            {!isCaregiver && (
+                              <p className="text-white/80 text-sm font-semibold mt-2">👤 {r.cuidadorNome ?? 'Cuidador'}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Badge de status */}
+                        <div className="flex-shrink-0 text-center">
+                          <div className="bg-white/20 backdrop-blur rounded-2xl px-5 py-3">
+                            <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-1">Status</p>
+                            <p className="text-white font-extrabold text-lg">{r.status}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Corpo ── */}
+                    <div className="bg-orange-50/60 px-8 py-6 space-y-5">
+
+                      {/* Período visual */}
+                      <div className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-orange-100">
+                        <div className="flex-1 text-center">
+                          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Entrada</p>
+                          <p className="text-base font-extrabold text-gray-800">{fmtShort(entrada)}</p>
+                          <p className="text-xs text-gray-500">{entrada.getFullYear()}</p>
+                        </div>
+                        <div className="flex flex-col items-center gap-1 px-2">
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(dias, 7) }).map((_, i) => (
+                              <div key={i} className="w-2 h-2 rounded-full bg-orange-300" />
+                            ))}
+                            {dias > 7 && <span className="text-orange-400 text-xs font-bold">+{dias - 7}</span>}
+                          </div>
+                          <span className="text-orange-500 font-extrabold text-sm">{dias} dia{dias !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="flex-1 text-center">
+                          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Saída</p>
+                          <p className="text-base font-extrabold text-gray-800">{fmtShort(saida)}</p>
+                          <p className="text-xs text-gray-500">{saida.getFullYear()}</p>
+                        </div>
+                      </div>
+
+                      {/* Pessoa relacionada */}
+                      {!isCaregiver && (
+                        <div className="flex items-center gap-4 p-4 bg-orange-50 rounded-2xl border border-orange-100">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white font-extrabold text-lg flex-shrink-0 shadow-sm">
+                            {(r.cuidadorNome ?? 'C').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-xs text-orange-500 font-bold uppercase tracking-wider">Cuidador responsável</p>
+                            <p className="text-base font-extrabold text-gray-800 mt-0.5">{r.cuidadorNome ?? '—'}</p>
+                          </div>
+                        </div>
+                      )}
+                      {isCaregiver && r.donoNome && (
+                        <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-extrabold text-lg flex-shrink-0 shadow-sm">
+                            {r.donoNome.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-xs text-blue-500 font-bold uppercase tracking-wider">Solicitante</p>
+                            <p className="text-base font-extrabold text-gray-800 mt-0.5">{r.donoNome}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Detalhes extras */}
+                      {(r.cuidadosEspeciais || r.descricaoPet) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {r.cuidadosEspeciais && (
+                            <div className="p-4 bg-yellow-50 rounded-2xl border border-yellow-100">
+                              <p className="text-xs text-yellow-600 font-bold uppercase tracking-wider mb-2">⚕️ Cuidados especiais</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{r.cuidadosEspeciais}</p>
+                            </div>
+                          )}
+                          {r.descricaoPet && (
+                            <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                              <p className="text-xs text-purple-500 font-bold uppercase tracking-wider mb-2">🐾 Comportamento</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{r.descricaoPet}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Rodapé: valor + ações */}
+                      <div className="flex items-center justify-between pt-4 border-t-2 border-dashed border-orange-200">
+                        <div>
+                          <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Valor total estimado</p>
+                          <p className="text-3xl font-extrabold text-orange-500 mt-1">R$ {r.valorTotal.toFixed(2)}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{dias} dia{dias !== 1 ? 's' : ''} × R$ {(r.valorTotal / dias).toFixed(2)}/dia</p>
+                          {!isCaregiver && r.cuidadorTelefone && (
+                            <a
+                              href={`https://wa.me/55${r.cuidadorTelefone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white font-bold text-sm transition-colors shadow-sm"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.852L.057 23.55a.75.75 0 00.921.921l5.696-1.475A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.693-.497-5.241-1.367l-.375-.214-3.882 1.005 1.033-3.772-.234-.389A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                              </svg>
+                              WhatsApp
+                            </a>
+                          )}
+                        </div>
+
+                        {isCaregiver && isPendente && (
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => handleUpdateStatus(r.id, 'Recusada')}
+                              disabled={updatingStatus === r.id}
+                              className="px-6 py-3 rounded-2xl border-2 border-red-300 text-red-500 font-bold text-sm hover:bg-red-50 disabled:opacity-40 transition-colors"
+                            >
+                              {updatingStatus === r.id ? '...' : '✕ Recusar'}
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(r.id, 'Aceita')}
+                              disabled={updatingStatus === r.id}
+                              className="px-6 py-3 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-bold text-sm disabled:opacity-40 transition-colors shadow-md"
+                            >
+                              {updatingStatus === r.id ? '...' : '✓ Aceitar'}
+                            </button>
+                          </div>
+                        )}
+                        {isCaregiver && isAceito && (
+                          <button
+                            onClick={() => !jaCuidadorFinalizou && handleFinalizar(r.id)}
+                            disabled={updatingStatus === r.id || jaCuidadorFinalizou}
+                            className={`px-6 py-3 rounded-2xl font-bold text-sm transition-colors shadow-md ${
+                              jaCuidadorFinalizou
+                                ? 'bg-emerald-500 text-white cursor-not-allowed'
+                                : 'bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40'
+                            }`}
+                          >
+                            {updatingStatus === r.id ? '...' : jaCuidadorFinalizou ? '✓ Finalizado' : '✓ Finalizar'}
+                          </button>
+                        )}
+                        {!isCaregiver && isAceito && (
+                          <button
+                            onClick={() => !jaDonoFinalizou && handleFinalizar(r.id)}
+                            disabled={updatingStatus === r.id || jaDonoFinalizou}
+                            className={`px-6 py-3 rounded-2xl font-bold text-sm transition-colors shadow-md ${
+                              jaDonoFinalizou
+                                ? 'bg-emerald-500 text-white cursor-not-allowed'
+                                : 'bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40'
+                            }`}
+                          >
+                            {updatingStatus === r.id ? '...' : jaDonoFinalizou ? '✓ Finalizado' : '✓ Finalizar'}
+                          </button>
+                        )}
+                        {!isCaregiver && r.status === 'Finalizada' && (
+                          <button
+                            onClick={() => setAvaliacaoModal({ reservaId: r.id, cuidadorId: r.cuidadorId })}
+                            className="px-6 py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-colors shadow-md"
+                          >
+                            ⭐ Avaliar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {activeTab !== 'profile' && activeTab !== 'bookings' && (
           <div className="max-w-6xl mx-auto space-y-8">
             <div className="flex items-center justify-between">
               <div>
@@ -987,14 +1630,15 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { label: 'Reservas Ativas', value: '3', color: 'blue' },
-                { label: 'Pets Cadastrados', value: '2', color: 'orange' },
-                { label: 'Mensagens Novas', value: '12', color: 'green' },
-                { label: 'Avaliações', value: '4.9', color: 'yellow' },
+                { label: 'Total de Reservas', value: reservas.length > 0 ? String(reservas.length) : '—' },
+                { label: 'Pets Cadastrados', value: '—' },
+                { label: 'Mensagens Novas', value: '—' },
+                { label: 'Avaliação Média', value: avaliacaoMedia !== null ? avaliacaoMedia.toFixed(1) : '—' },
               ].map((stat, i) => (
-                <Card key={i} className="p-6 border-none shadow-sm hover:shadow-md transition-shadow">
+                <Card key={i} className="p-6 border-orange-200 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-400 to-amber-400 rounded-t-xl" />
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-800 mt-2">{stat.value}</p>
+                  <p className="text-3xl font-bold text-orange-500 mt-2">{stat.value}</p>
                 </Card>
               ))}
             </div>
@@ -1035,35 +1679,73 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
               <div className="lg:col-span-2 space-y-4">
                 <h3 className="text-xl font-bold text-gray-800">Reservas Recentes</h3>
                 <Card className="divide-y border-none shadow-sm">
-                  {[1, 2, 3].map((item) => (
-                    <div key={item} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
-                          <PawPrint className="w-6 h-6 text-orange-400" />
+                  {(() => {
+                    const twoWeeksAgo = new Date();
+                    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                    const recentes = reservas.filter((r) => new Date(r.dataEntrada) >= twoWeeksAgo || new Date(r.dataSaida) >= twoWeeksAgo);
+                    if (recentes.length === 0) {
+                      return (
+                        <div className="p-8 text-center text-gray-400 text-sm">
+                          Nenhuma reserva nas últimas 2 semanas.
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-800">Max (Golden Retriever)</p>
-                          <p className="text-sm text-gray-500">Cuidadora: Ana Silva • 15 Out - 18 Out</p>
+                      );
+                    }
+                    return recentes.map((r) => {
+                      const statusColors: Record<string, string> = {
+                        'Em análise': 'bg-yellow-100 text-yellow-700',
+                        'Aceita': 'bg-blue-100 text-blue-700',
+                        'Recusada': 'bg-red-100 text-red-700',
+                        'Finalizada': 'bg-emerald-100 text-emerald-700',
+                      };
+                      return (
+                        <div key={r.id} className="p-4 flex items-center justify-between hover:bg-orange-50 transition-colors border-l-4 border-l-orange-400 first:rounded-tl-xl last:rounded-bl-xl">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                              <PawPrint className="w-6 h-6 text-orange-400" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-800">{r.nomePet} ({r.especie})</p>
+                              <p className="text-sm text-gray-500">
+                                {isCaregiver ? r.donoNome : r.cuidadorNome} • {new Date(r.dataEntrada).toLocaleDateString('pt-BR')} - {new Date(r.dataSaida).toLocaleDateString('pt-BR')}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 text-xs font-bold rounded-full ${statusColors[r.status] ?? 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
                         </div>
-                      </div>
-                      <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Confirmado</span>
-                    </div>
-                  ))}
+                      );
+                    });
+                  })()}
                 </Card>
               </div>
 
               {/* Tips / Suggestions */}
               <div className="space-y-4">
-                <h3 className="text-xl font-bold text-gray-800">Dicas para você</h3>
-                <Card className="p-6 bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none">
-                  <h4 className="font-bold text-lg mb-2">Complete seu perfil!</h4>
-                  <p className="text-orange-50 text-sm mb-4">
-                    Perfis completos têm 3x mais chances de encontrar cuidadores ideais.
-                  </p>
-                  <Button variant="secondary" className="w-full text-orange-600 font-bold">
-                    Editar Perfil
-                  </Button>
-                </Card>
+                <h3 className="text-xl font-bold text-gray-800">
+                  {isCaregiver ? 'Seu Desempenho' : 'Dicas para você'}
+                </h3>
+                {isCaregiver && avaliacaoMedia !== null ? (
+                  <Card className="p-6 border-none shadow-sm">
+                    <p className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Avaliação Média</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-5xl font-bold text-orange-500">{avaliacaoMedia.toFixed(1)}</span>
+                      <div className="flex gap-0.5">
+                        {[1,2,3,4,5].map((s) => (
+                          <Star key={s} className={`w-5 h-5 ${s <= Math.round(avaliacaoMedia) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
+                        ))}
+                      </div>
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-6 bg-gradient-to-br from-orange-500 to-amber-500 text-white border-none">
+                    <h4 className="font-bold text-lg mb-2">Complete seu perfil!</h4>
+                    <p className="text-orange-50 text-sm mb-4">
+                      Perfis completos têm 3x mais chances de encontrar cuidadores ideais.
+                    </p>
+                    <Button variant="secondary" className="w-full text-orange-600 font-bold">
+                      Editar Perfil
+                    </Button>
+                  </Card>
+                )}
               </div>
             </div>
           </div>
@@ -1095,6 +1777,65 @@ export function Dashboard({ onLogout, onNavigate, userRole }: DashboardProps) {
             )}
           </div>
         </>
+      )}
+
+      {/* Modal de Avaliação */}
+      {avaliacaoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-extrabold text-gray-800">Avaliar Cuidador</h2>
+              <button onClick={() => setAvaliacaoModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Estrelas */}
+            <div>
+              <p className="text-sm font-semibold text-gray-500 mb-2">Nota</p>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => setAvaliacaoNota(n)}>
+                    <Star
+                      className={`w-8 h-8 transition-colors ${n <= avaliacaoNota ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Comentário */}
+            <div>
+              <p className="text-sm font-semibold text-gray-500 mb-2">Comentário</p>
+              <textarea
+                value={avaliacaoComentario}
+                onChange={(e) => setAvaliacaoComentario(e.target.value)}
+                rows={3}
+                placeholder="Como foi a experiência?"
+                className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+
+            {/* Foto opcional */}
+            <div>
+              <p className="text-sm font-semibold text-gray-500 mb-2">Foto (opcional)</p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setAvaliacaoFoto(e.target.files?.[0] ?? null)}
+                className="text-sm text-gray-500"
+              />
+            </div>
+
+            <button
+              onClick={handleSubmitAvaliacao}
+              disabled={avaliacaoLoading}
+              className="w-full py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm disabled:opacity-40 transition-colors shadow-md"
+            >
+              {avaliacaoLoading ? 'Enviando...' : 'Enviar Avaliação'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
