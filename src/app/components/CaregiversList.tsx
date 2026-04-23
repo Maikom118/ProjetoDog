@@ -42,6 +42,17 @@ const SORT_OPTIONS = [
 ];
 
 export function CaregiversList({ onBack, onViewProfile, initialFilters }: CaregiversListProps) {
+  const dark = localStorage.getItem('petconnect-dark') === 'true';
+  const dm = {
+    bg:          dark ? '#0F172A' : '#FFFBEB',
+    card:        dark ? '#1E293B' : '#FFFFFF',
+    border:      dark ? '#334155' : '#EEDFD3',
+    textPrimary: dark ? '#E2E8F0' : '#1E2939',
+    textSec:     dark ? '#94A3B8' : '#717182',
+    form:        dark ? '#0F172A' : '#F3F3F5',
+    accent:      dark ? '#1E3A5F' : '#FFEDD4',
+  };
+
   const [cuidadores, setCuidadores] = useState<Cuidador[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,10 +124,10 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: dm.bg }}>
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-          <p className="text-gray-500">Carregando cuidadores...</p>
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#FF6900' }} />
+          <p style={{ color: dm.textSec }}>Carregando cuidadores...</p>
         </div>
       </div>
     );
@@ -124,10 +135,10 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-xl shadow-md max-w-md text-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: dm.bg }}>
+        <div className="p-8 rounded-xl shadow-md max-w-md text-center" style={{ backgroundColor: dm.card, border: `1px solid ${dm.border}` }}>
           <p className="text-red-500 mb-4">{error}</p>
-          <button onClick={loadCuidadores} className="px-5 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+          <button onClick={loadCuidadores} className="px-5 py-2 text-white rounded-lg transition-colors" style={{ backgroundColor: '#FF6900' }}>
             Tentar Novamente
           </button>
         </div>
@@ -136,296 +147,263 @@ export function CaregiversList({ onBack, onViewProfile, initialFilters }: Caregi
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ backgroundColor: dm.bg }}>
 
-      {/* Hero Banner */}
-      <div className="relative bg-gradient-to-br from-orange-500 via-orange-600 to-amber-500 overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-56 h-56 bg-white/10 rounded-full" />
-        <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/10 rounded-full" />
-        <div className="relative max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {onBack && (
-                <button
-                  onClick={onBack}
-                  className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors text-sm"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Voltar
-                </button>
-              )}
-              <div>
-                <h1 className="text-2xl font-bold text-white">Cuidadores</h1>
-                <p className="text-orange-100 text-sm">Encontre o cuidador ideal para seu pet</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-3xl font-bold text-white">{filteredCuidadores.length}</p>
-              <p className="text-orange-100 text-sm">
-                {hasActiveFilters ? 'encontrado(s)' : 'disponíveis'}
-              </p>
-            </div>
-          </div>
+      {/* Header */}
+      <div className="px-6 pt-6 pb-2 max-w-7xl mx-auto">
+        <div className="flex items-center gap-3 mb-1">
+          {onBack && (
+            <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold transition-colors" style={{ color: dm.textPrimary }}>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
+          <h1 className="text-2xl font-bold" style={{ color: '#FF6900' }}>Cuidadores Disponíveis</h1>
         </div>
       </div>
 
-      {/* Search + Filters sempre visíveis */}
-      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 space-y-3">
-
-          {/* Busca por nome */}
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      {/* Filters bar */}
+      <div className="border-b sticky top-0 z-10" style={{ backgroundColor: dm.card, borderColor: dm.border }}>
+        <div className="max-w-7xl mx-auto px-6 py-3 flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: dm.textSec }} />
             <input
               type="text"
-              placeholder="Buscar cuidador por nome..."
+              placeholder="Buscar por nome..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-colors"
+              className="w-full pl-9 pr-3 py-2 rounded-full text-sm focus:outline-none border"
+              style={{ backgroundColor: dm.form, borderColor: 'transparent', color: dm.textPrimary }}
             />
           </div>
 
-          {/* Filtros em linha */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <SlidersHorizontal className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1 px-3 py-2 rounded-full text-sm font-medium border cursor-default" style={{ backgroundColor: dm.form, borderColor: 'transparent', color: dm.textSec }}>
+              <SlidersHorizontal className="w-3.5 h-3.5" /> Filtrar
+            </span>
 
-            {/* Cidade */}
             <select
               value={filterCity}
               onChange={(e) => setFilterCity(e.target.value)}
-              className={`px-3 py-1.5 rounded-full text-sm border transition-colors cursor-pointer focus:outline-none ${
-                filterCity ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-600'
-              }`}
+              className="px-3 py-2 rounded-full text-sm border cursor-pointer focus:outline-none"
+              style={filterCity ? { backgroundColor: dm.accent, borderColor: '#FE9A00', color: '#FF6900' } : { backgroundColor: dm.form, borderColor: 'transparent', color: dm.textSec }}
             >
-              <option value="">📍 Todas as cidades</option>
-              {uniqueCities.map((city) => (
-                <option key={city} value={city}>{city}</option>
-              ))}
+              <option value="">Cidade ↓</option>
+              {uniqueCities.map((city) => <option key={city} value={city}>{city}</option>)}
             </select>
 
-            {/* Especialidade */}
-            <select
-              value={filterSpecialty}
-              onChange={(e) => setFilterSpecialty(e.target.value)}
-              className={`px-3 py-1.5 rounded-full text-sm border transition-colors cursor-pointer focus:outline-none ${
-                filterSpecialty ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-600'
-              }`}
-            >
-              <option value="">⭐ Especialidade</option>
-              {uniqueSpecialties.map((esp) => (
-                <option key={esp} value={esp}>{esp}</option>
-              ))}
-            </select>
-
-            {/* Preço máximo */}
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
-              filterMaxPrice ? 'bg-orange-50 border-orange-300' : 'bg-gray-50 border-gray-200'
-            }`}>
-              <span className="text-gray-400 text-xs">R$</span>
+            <div className="flex items-center gap-1 px-3 py-2 rounded-full text-sm border" style={filterMaxPrice ? { backgroundColor: dm.accent, borderColor: '#FE9A00' } : { backgroundColor: dm.form, borderColor: 'transparent' }}>
+              <span className="text-xs" style={{ color: dm.textSec }}>Valor R$</span>
               <input
-                type="number"
-                min="0"
-                placeholder="Preço máx."
+                type="number" min="0" placeholder="máx"
                 value={filterMaxPrice}
                 onChange={(e) => setFilterMaxPrice(e.target.value)}
-                className="w-24 bg-transparent text-sm focus:outline-none text-gray-600 placeholder-gray-400"
+                className="w-16 bg-transparent text-sm focus:outline-none"
+                style={{ color: dm.textPrimary }}
               />
             </div>
 
-            {/* Ordenar */}
+            {/* Especialidade checkboxes */}
+            <div className="flex items-center gap-2">
+              {uniqueSpecialties.map((esp) => {
+                const active = filterSpecialty === esp;
+                return (
+                  <label key={esp} className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm border cursor-pointer select-none transition-colors"
+                    style={active ? { backgroundColor: dm.accent, borderColor: '#FE9A00', color: '#FF6900' } : { backgroundColor: dm.form, borderColor: 'transparent', color: dm.textSec }}
+                  >
+                    <input type="checkbox" className="w-3.5 h-3.5" style={{ accentColor: '#FF6900' }} checked={active}
+                      onChange={() => setFilterSpecialty(active ? '' : esp)} />
+                    {esp === 'Cachorro' ? '🐶 Cães' : esp === 'Gato' ? '🐱 Gatos' : esp}
+                  </label>
+                );
+              })}
+            </div>
+
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-3 py-1.5 rounded-full text-sm border bg-gray-50 border-gray-200 text-gray-600 cursor-pointer focus:outline-none"
+              className="px-3 py-2 rounded-full text-sm border cursor-pointer focus:outline-none"
+              style={{ backgroundColor: dm.form, borderColor: 'transparent', color: dm.textSec }}
             >
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>↕ {opt.label}</option>
-              ))}
+              {SORT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>↕ {opt.label}</option>)}
             </select>
 
-            {/* Limpar filtros */}
             {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm bg-red-50 border border-red-200 text-red-500 hover:bg-red-100 transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-                Limpar
+              <button onClick={clearFilters} className="flex items-center gap-1 px-3 py-2 rounded-full text-sm border transition-colors" style={{ backgroundColor: '#FEE2E2', borderColor: 'transparent', color: '#991B1B' }}>
+                <X className="w-3.5 h-3.5" /> Limpar
               </button>
             )}
           </div>
         </div>
+
+        {/* Count */}
+        <div className="max-w-7xl mx-auto px-6 pb-2">
+          <p className="text-sm" style={{ color: dm.textSec }}>
+            Total: <strong style={{ color: dm.textPrimary }}>{filteredCuidadores.length} Cuidadores encontrados</strong>
+          </p>
+        </div>
       </div>
 
-      {/* Banner de resultado do chat */}
+      {/* Best Match banner */}
       {!!bestMatchId && (
         <div className="max-w-7xl mx-auto px-6 pt-4">
-          <div className="flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-200 rounded-xl text-sm text-orange-700">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm" style={{ backgroundColor: '#FFEDD4', color: '#FF6900' }}>
             <span className="text-xl">🏆</span>
             <span>
-              Resultados personalizados para <strong>{petName ?? 'seu pet'}</strong> — ordenados por compatibilidade pelo Toby.
-              O primeiro da lista é o <strong>Best Match</strong> e a distância de cada cuidador está indicada no cartão!
+              Resultados personalizados para <strong>{petName ?? 'seu pet'}</strong> — ordenados por compatibilidade.
+              O primeiro é o <strong>Best Match</strong> com distância indicada no cartão!
             </span>
           </div>
         </div>
       )}
 
-      {/* Grid de Cuidadores */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      {/* Cards Grid */}
+      <div className="max-w-7xl mx-auto px-6 py-6">
         {filteredCuidadores.length === 0 ? (
-          <div className="bg-white p-16 rounded-2xl shadow-sm text-center">
+          <div className="p-16 rounded-2xl shadow-sm text-center" style={{ backgroundColor: dm.card, border: `1px solid ${dm.border}` }}>
             <p className="text-5xl mb-4">🐾</p>
-            <p className="text-gray-500 font-medium">Nenhum cuidador encontrado</p>
+            <p className="font-medium" style={{ color: dm.textSec }}>Nenhum cuidador encontrado</p>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-3 text-orange-500 hover:underline text-sm">
+              <button onClick={clearFilters} className="mt-3 hover:underline text-sm" style={{ color: '#FF6900' }}>
                 Limpar filtros
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 items-start">
             {filteredCuidadores.map((cuidador, index) => {
               const isBestMatch = !!(bestMatchId && cuidador.id === bestMatchId);
               const distancia = cuidador.id ? distanciaMap.get(cuidador.id) : undefined;
               return (
-              <motion.div
-                key={cuidador.id}
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: index * 0.06, ease: 'easeOut' }}
-                className={`relative ${isBestMatch ? 'p-[3px] rounded-[20px] bg-gradient-to-br from-orange-400 via-amber-400 to-orange-500' : ''}`}
-                onMouseEnter={() => cuidador.endereco && setHoveredMapId(cuidador.id ?? null)}
-                onMouseLeave={() => setHoveredMapId(null)}
-              >
-                {/* Minimap popover */}
-                {hoveredMapId === cuidador.id && cuidador.endereco && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-64 rounded-2xl overflow-hidden shadow-2xl border border-gray-100 bg-white">
-                    <iframe
-                      src={buildMapUrl(cuidador.endereco)}
-                      width="100%"
-                      height="160"
-                      style={{ border: 0 }}
-                      loading="lazy"
-                      referrerPolicy="no-referrer-when-downgrade"
-                      title={`Mapa - ${cuidador.nome}`}
-                    />
-                    <div className="px-3 py-1.5 text-xs text-gray-500 text-center truncate bg-gray-50 border-t border-gray-100">
-                      {[cuidador.endereco.cidade, cuidador.endereco.uf].filter(Boolean).join(', ')}
+                <motion.div
+                  key={cuidador.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05, ease: 'easeOut' }}
+                  className="relative"
+                  onMouseEnter={() => cuidador.endereco && setHoveredMapId(cuidador.id ?? null)}
+                  onMouseLeave={() => setHoveredMapId(null)}
+                >
+                  {/* Map popover */}
+                  {hoveredMapId === cuidador.id && cuidador.endereco && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-64 rounded-2xl overflow-hidden shadow-2xl border bg-white" style={{ borderColor: '#EEDFD3' }}>
+                      <iframe src={buildMapUrl(cuidador.endereco)} width="100%" height="160" style={{ border: 0 }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" title={`Mapa - ${cuidador.nome}`} />
+                      <div className="px-3 py-1.5 text-xs text-center truncate" style={{ backgroundColor: '#F3F3F5', color: '#717182' }}>
+                        {[cuidador.endereco.cidade, cuidador.endereco.uf].filter(Boolean).join(', ')}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Badge flutuante acima do card */}
-                {isBestMatch && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold rounded-full shadow-lg whitespace-nowrap">
-                    🏆 MELHOR MATCH
-                  </div>
-                )}
-              <div
-                className={`group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col ${
-                  isBestMatch ? 'rounded-[18px] shadow-orange-200 shadow-xl' : ''
-                }`}
-              >
-                {/* Topo colorido */}
-                <div className={`bg-gradient-to-br ${isBestMatch ? 'from-orange-500 to-amber-400' : 'from-orange-400 to-amber-500'} h-20 relative flex-shrink-0`}>
-                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2">
-                    <div className="w-16 h-16 rounded-full bg-white p-1 shadow-md">
+                  {isBestMatch && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 px-3 py-1 text-white text-xs font-bold rounded-full shadow-md whitespace-nowrap" style={{ background: 'linear-gradient(to right, #FF6900, #FE9A00)' }}>
+                      🏆 MELHOR MATCH
+                    </div>
+                  )}
+
+                  {/* Card */}
+                  <div className={`rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow ${isBestMatch ? 'ring-2 ring-orange-400' : ''}`} style={{ backgroundColor: dm.card, border: `1px solid ${dm.border}` }}>
+
+                    {/* Top photo area */}
+                    <div className="relative flex-shrink-0 overflow-hidden" style={{ height: '140px', backgroundColor: '#FFEDD4' }}>
                       {cuidador.fotoUrl ? (
-                        <img src={cuidador.fotoUrl} alt={cuidador.nome} className="w-full h-full rounded-full object-cover" />
+                        <img src={cuidador.fotoUrl} alt={cuidador.nome} className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-2xl font-bold">
-                          {cuidador.nome?.charAt(0).toUpperCase() || 'C'}
+                        <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #FFEDD4, #FE9A00 80%)' }} />
+                      )}
+
+                      {/* Nav arrows */}
+                      <button className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 flex items-center justify-center shadow-sm text-gray-500 hover:bg-white transition-colors">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                      </button>
+                      <button className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 flex items-center justify-center shadow-sm text-gray-500 hover:bg-white transition-colors">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    </div>
+
+                    {/* Avatar overlapping */}
+                    <div className="flex justify-center -mt-9 mb-2 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 rounded-full border-4 border-white shadow-md overflow-hidden" style={{ backgroundColor: '#FFEDD4' }}>
+                          {cuidador.fotoUrl ? (
+                            <img src={cuidador.fotoUrl} alt={cuidador.nome} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xl font-bold text-white" style={{ background: 'linear-gradient(135deg, #FF6900, #FE9A00)' }}>
+                              {cuidador.nome?.charAt(0).toUpperCase() || 'C'}
+                            </div>
+                          )}
+                        </div>
+                        {/* Heart badge */}
+                        <button className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow-md border-2 border-white" style={{ backgroundColor: '#FF6900' }}>
+                          <svg className="w-3 h-3" fill="white" viewBox="0 0 24 24">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="px-4 pb-4 flex flex-col items-center text-center">
+                      <h3 className="font-bold text-sm mb-2" style={{ color: dm.textPrimary }}>{cuidador.nome}</h3>
+
+                      {/* Stars + rating badge */}
+                      <div className="flex items-center gap-1 mb-3">
+                        {[1,2,3,4,5].map((i) => (
+                          <Star key={i} className={`w-4 h-4 ${i <= 4 ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}`} />
+                        ))}
+                        <span className="ml-1 px-1.5 py-0.5 rounded text-xs font-bold text-white" style={{ backgroundColor: '#FF6900' }}>4.0</span>
+                      </div>
+
+                      {/* Location */}
+                      <div className="flex items-center gap-1 mb-1.5 text-xs" style={{ color: dm.textSec }}>
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#FF6900' }} />
+                        <span>{cuidador.endereco?.cidade ? `${cuidador.endereco.cidade}, ${cuidador.endereco.uf}` : 'Não informado'}</span>
+                      </div>
+
+                      {/* Price */}
+                      <div className="flex items-center gap-1 mb-2 text-sm font-semibold" style={{ color: dm.textPrimary }}>
+                        <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="#FF6900" strokeWidth={2}>
+                          <circle cx="12" cy="12" r="10"/><path d="M12 6v12M9 9h4.5a1.5 1.5 0 010 3H10.5a1.5 1.5 0 010 3H15"/>
+                        </svg>
+                        <span>{cuidador.valorDiaria != null ? `R$ ${cuidador.valorDiaria.toFixed(2)}/dia` : 'Sob consulta'}</span>
+                      </div>
+
+                      {/* Distance */}
+                      {distancia != null && (
+                        <div className="flex items-center gap-1 mb-2 text-xs font-medium" style={{ color: isBestMatch ? '#FF6900' : '#0369a1' }}>
+                          <Navigation className="w-3 h-3" />
+                          {distancia < 1 ? `${Math.round(distancia * 1000)} m` : `${distancia.toFixed(1)} km`}
                         </div>
                       )}
+
+                      {/* Specialty tags */}
+                      {cuidador.especialidades && cuidador.especialidades.length > 0 && (
+                        <div className="flex flex-wrap gap-1 justify-center mb-3">
+                          {cuidador.especialidades.slice(0, 2).map((esp, idx) => (
+                            <span key={idx} className="px-3 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: dm.form, color: dm.textSec }}>
+                              {esp}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => onViewProfile?.(cuidador)}
+                        className="w-full py-2.5 rounded-full text-white text-sm font-bold transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: '#FF6900' }}
+                      >
+                        Ver Perfil
+                      </button>
                     </div>
                   </div>
-                  {/* Badge verificado no canto do card */}
-                  {cuidador.fotoUrl && (
-                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                      Verificado
+
+                  {/* Hover: map popover acima */}
+                  {hoveredMapId === cuidador.id && cuidador.fotoUrl && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-48 rounded-2xl overflow-hidden shadow-xl border" style={{ borderColor: '#EEDFD3' }}>
+                      <img src={cuidador.fotoUrl} alt={cuidador.nome} className="w-full h-32 object-cover" />
                     </div>
                   )}
-                </div>
-
-                {/* Conteúdo */}
-                <div className="pt-10 px-5 pb-5 flex flex-col flex-1">
-                  <div className="text-center mb-4">
-                    <h3 className="font-bold text-gray-900 text-base leading-tight">{cuidador.nome}</h3>
-
-                    {/* Estrelas mock */}
-                    <div className="flex items-center justify-center gap-0.5 mt-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                      ))}
-                      <span className="text-xs text-gray-400 ml-1">5.0</span>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-1 mt-2 text-gray-500 text-sm">
-                      <MapPin className="w-3.5 h-3.5 text-orange-400" />
-                      <span>
-                        {cuidador.endereco?.cidade
-                          ? `${cuidador.endereco.cidade}, ${cuidador.endereco.uf}`
-                          : 'Não informado'}
-                      </span>
-                    </div>
-
-                    {/* Distância do match */}
-                    {distancia != null && (
-                      <div className={`inline-flex items-center justify-center gap-1 mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        isBestMatch ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 text-blue-600'
-                      }`}>
-                        <Navigation className="w-3 h-3" />
-                        {distancia < 1
-                          ? `${Math.round(distancia * 1000)} m de distância`
-                          : `${distancia.toFixed(1)} km de distância`}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Especialidades */}
-                  {cuidador.especialidades && cuidador.especialidades.length > 0 && (
-                    <div className="flex flex-wrap gap-1 justify-center mb-4">
-                      {cuidador.especialidades.slice(0, 3).map((esp, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded-full text-xs font-medium">
-                          {esp}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-auto space-y-3">
-                    <div className="flex items-center justify-center gap-1">
-                      <DollarSign className="w-4 h-4 text-orange-500" />
-                      <span className="text-lg font-bold text-orange-500">
-                        {cuidador.valorDiaria != null ? `R$ ${cuidador.valorDiaria.toFixed(2)}` : 'Sob consulta'}
-                      </span>
-                      {cuidador.valorDiaria != null && <span className="text-xs text-gray-400">/dia</span>}
-                    </div>
-
-                    <button
-                      onClick={() => onViewProfile?.(cuidador)}
-                      className="w-full py-2.5 bg-orange-500 text-white rounded-xl hover:bg-orange-600 active:scale-95 transition-all text-sm font-semibold shadow-sm"
-                    >
-                      Ver Perfil
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Foto ampliada no hover — abaixo do card */}
-              {hoveredMapId === cuidador.id && cuidador.fotoUrl && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-56 rounded-2xl overflow-hidden shadow-2xl border border-gray-100">
-                  <img src={cuidador.fotoUrl} alt={cuidador.nome} className="w-full h-40 object-cover" />
-                  <div className="px-3 py-1.5 text-xs text-gray-500 text-center bg-white border-t border-gray-100 truncate">
-                    {cuidador.nome}
-                  </div>
-                </div>
-              )}
-              </motion.div>
-            );
+                </motion.div>
+              );
             })}
           </div>
         )}
