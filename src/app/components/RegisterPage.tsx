@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { PawPrint, Mail, Lock, ArrowLeft, HandHeart, User, Phone, MapPin, Calendar, CreditCard, ClipboardList, Eye, EyeOff } from 'lucide-react';
-import { Button } from './ui/button';
+import { Mail, KeyRound, ArrowLeft, User, Phone, Calendar, DollarSign, Eye, EyeOff, Home } from 'lucide-react';
+import { PetConnectLogo } from './PetConnectLogo';
 import { Input } from './ui/input';
-import { Card } from './ui/card';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
@@ -16,11 +15,36 @@ interface RegisterPageProps {
   onSuccess: () => void;
 }
 
+
+function FieldInput({ id, name, label, type = 'text', value, onChange, placeholder, required, disabled, maxLength, icon: Icon, iconColor }: any) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-sm font-semibold" style={{ color: '#1E2939' }}>{label}</Label>
+      <div className="relative">
+        {Icon && <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: iconColor ?? '#717182' }} />}
+        <Input
+          id={id}
+          name={name ?? id}
+          type={type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          required={required}
+          disabled={disabled}
+          maxLength={maxLength}
+          className={`${Icon ? 'pl-9' : ''} border-0 text-sm`}
+          style={{ backgroundColor: disabled ? '#E8E8EC' : '#F3F3F5', color: '#1E2939' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps) {
   const [loading, setLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const isOwner = userType === 'owner';
-  const primaryColor = isOwner ? 'orange' : 'amber';
+  const brandColor = isOwner ? '#FF6900' : '#FE9A00';
   const [enderecoTravado, setEnderecoTravado] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -40,10 +64,8 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
       cidade: '',
       uf: '',
     },
-    // Dono fields
     contatoEmergenciaNome: '',
     contatoEmergenciaTelefone: '',
-    // Cuidador fields
     bio: '',
     valorDiaria: 0,
     especialidades: [] as string[],
@@ -111,10 +133,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
       const [parent, child] = name.split('.');
       setFormData((prev: any) => ({
         ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value,
-        },
+        [parent]: { ...prev[parent], [child]: value },
       }));
     } else {
       setFormData((prev) => ({
@@ -126,16 +145,9 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
 
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.replace(/\D/g, '');
-
-    setFormData((prev) => ({
-      ...prev,
-      endereco: { ...prev.endereco, cep: rawValue },
-    }));
-
+    setFormData((prev) => ({ ...prev, endereco: { ...prev.endereco, cep: rawValue } }));
     const digits = rawValue.replace(/\D/g, '');
-    if (digits.length < 8) {
-  setEnderecoTravado(false);
-}
+    if (digits.length < 8) setEnderecoTravado(false);
     if (digits.length === 8) {
       setCepLoading(true);
       try {
@@ -153,7 +165,7 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
               complemento: data.complemento || prev.endereco.complemento,
             },
           }));
-           setEnderecoTravado(true);
+          setEnderecoTravado(true);
         } else {
           toast.error('CEP não encontrado.');
         }
@@ -167,17 +179,14 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateCpf(formData.cpf)) {
       toast.error('CPF inválido. Verifique e tente novamente.');
       return;
     }
-
     if (formData.senha !== formData.confirmarSenha) {
       toast.error('As senhas não coincidem.');
       return;
     }
-
     setLoading(true);
     try {
       if (isOwner) {
@@ -197,176 +206,270 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-4 py-12">
-      <Card className="w-full max-w-2xl p-8 bg-white shadow-xl">
+    <div className="min-h-screen w-full flex flex-col items-center justify-start p-6 py-10" style={{ backgroundColor: '#FFFBEB' }}>
+      {/* Logo */}
+      <div className="mb-8">
+        <PetConnectLogo />
+      </div>
+
+      {/* Card */}
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-md p-8" style={{ border: '1px solid #EEDFD3' }}>
+        {/* Back */}
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors"
+          className="flex items-center gap-1.5 text-sm font-semibold mb-6 transition-colors"
+          style={{ color: '#1E2939' }}
         >
-          <ArrowLeft className="w-5 h-5" />
-          Voltar
+          <ArrowLeft className="w-4 h-4" />
+          VOLTAR
         </button>
 
+        {/* Title */}
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">
-            {isOwner ? 'Cadastro - Tutor de Pet' : 'Cadastro - Cuidador'}
+          <h2 className="text-2xl font-bold mb-1" style={{ color: '#1E2939' }}>
+            {isOwner ? 'Cadastro: Tutor de Pet' : 'Cadastro: Cuidador de Pet'}
           </h2>
-          <p className="text-gray-600">
-            Preencha seus dados para começar
+          <p className="text-sm" style={{ color: '#717182' }}>
+            {isOwner ? 'Preencha seus dados para começar a encontrar Cuidadores' : 'Preencha seus dados para começar a cuidar de Pets'}
           </p>
         </div>
 
-        <form onSubmit={handleRegister} className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Informações Básicas */}
+        <form onSubmit={handleRegister} className="space-y-8">
+          {/* Two-column: Informações Pessoais + Endereço */}
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Informações Pessoais */}
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg border-b pb-2">Informações Pessoais</h3>
-              <div className="space-y-2">
-                <Label htmlFor="nome">Nome Completo</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="nome" name="nome" value={formData.nome} onChange={handleInputChange} className="pl-10" required />
-                </div>
+              <div>
+                <h3 className="font-bold text-base mb-2" style={{ color: '#1E2939' }}>Informações Pessoais</h3>
+                <hr style={{ borderColor: '#EEDFD3' }} />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+
+              <FieldInput id="nome" label="Nome Completo" value={formData.nome} onChange={handleInputChange} required icon={User} />
+              <FieldInput id="email" label="Email" type="email" value={formData.email} onChange={handleInputChange} placeholder="seu@email.com.br" required icon={Mail} />
+
+              {/* Senha */}
+              <div className="space-y-1.5">
+                <Label htmlFor="senha" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Senha</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} className="pl-10" required />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="senha">Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="senha" name="senha" type={showSenha ? 'text' : 'password'} value={formData.senha} onChange={handleSenhaChange} className="pl-10 pr-10" required />
-                  <button
-                    type="button"
-                    onClick={() => setShowSenha((prev) => !prev)}
-                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
-                    aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                  >
-                    {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#717182' }} />
+                  <Input
+                    id="senha" name="senha"
+                    type={showSenha ? 'text' : 'password'}
+                    value={formData.senha} onChange={handleSenhaChange}
+                    placeholder="••••••••" required
+                    className="pl-9 pr-10 border-0 text-sm"
+                    style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                  />
+                  <button type="button" onClick={() => setShowSenha(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: '#717182' }}>
+                    {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmarSenha">Confirmar Senha</Label>
+
+              {/* Confirmar Senha */}
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmarSenha" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Repetir Senha</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="confirmarSenha" name="confirmarSenha" type={showConfirmarSenha ? 'text' : 'password'} value={formData.confirmarSenha} onChange={handleConfirmarSenhaChange} className="pl-10 pr-10" required />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmarSenha((prev) => !prev)}
-                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 transition-colors"
-                    aria-label={showConfirmarSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                  >
-                    {showConfirmarSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#717182' }} />
+                  <Input
+                    id="confirmarSenha" name="confirmarSenha"
+                    type={showConfirmarSenha ? 'text' : 'password'}
+                    value={formData.confirmarSenha} onChange={handleConfirmarSenhaChange}
+                    placeholder="••••••••" required
+                    className="pl-9 pr-10 border-0 text-sm"
+                    style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                  />
+                  <button type="button" onClick={() => setShowConfirmarSenha(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: '#717182' }}>
+                    {showConfirmarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 {senhaError && <p className="text-xs text-red-500">{senhaError}</p>}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cpf">CPF</Label>
-                  <Input id="cpf" name="cpf" value={formData.cpf} onChange={handleCpfChange} placeholder="000.000.000-00" maxLength={14} required />
+
+              {/* CPF + Nascimento */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cpf" className="text-sm font-semibold" style={{ color: '#1E2939' }}>CPF</Label>
+                  <Input
+                    id="cpf" name="cpf"
+                    value={formData.cpf} onChange={handleCpfChange}
+                    placeholder="000.000.000-00" maxLength={14} required
+                    className="border-0 text-sm"
+                    style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                  />
                   {cpfError && <p className="text-xs text-red-500">{cpfError}</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dataNascimento">Nascimento</Label>
-                  <Input id="dataNascimento" name="dataNascimento" type="date" value={formData.dataNascimento} onChange={handleInputChange} required />
+                <div className="space-y-1.5">
+                  <Label htmlFor="dataNascimento" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Nascimento</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: brandColor }} />
+                    <Input
+                      id="dataNascimento" name="dataNascimento"
+                      type="date" value={formData.dataNascimento} onChange={handleInputChange} required
+                      className="pl-9 border-0 text-sm"
+                      style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="telefone">Telefone</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <Input id="telefone" name="telefone" value={formData.telefone} onChange={handleInputChange} className="pl-10" placeholder="(00) 00000-0000" required />
-                </div>
-              </div>
+
+              <FieldInput id="telefone" label="Telefone" value={formData.telefone} onChange={handleInputChange} placeholder="(00) 00000-0000" required icon={Phone} />
             </div>
 
             {/* Endereço */}
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg border-b pb-2">Endereço</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="endereco.cep">CEP</Label>
-                  <Input id="endereco.cep" name="endereco.cep" value={formData.endereco.cep} onChange={handleCepChange} placeholder="00000-000" required  maxLength={8}/>
-                  {cepLoading && <p className="text-xs text-orange-500">Buscando endereço...</p>}
+              <div>
+                <h3 className="font-bold text-base mb-2" style={{ color: '#1E2939' }}>Endereço</h3>
+                <hr style={{ borderColor: '#EEDFD3' }} />
+              </div>
+
+              {/* CEP + Estado */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="endereco.cep" className="text-sm font-semibold" style={{ color: '#1E2939' }}>CEP</Label>
+                  <Input
+                    id="endereco.cep" name="endereco.cep"
+                    value={formData.endereco.cep} onChange={handleCepChange}
+                    placeholder="00000-000" required maxLength={8}
+                    className="border-0 text-sm"
+                    style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                  />
+                  {cepLoading && <p className="text-xs" style={{ color: brandColor }}>Buscando...</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endereco.uf">UF</Label>
-                  <Input id="endereco.uf" name="endereco.uf" value={formData.endereco.uf} onChange={handleInputChange} disabled={enderecoTravado} maxLength={2} required />
+                <div className="space-y-1.5">
+                  <Label htmlFor="endereco.uf" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Estado</Label>
+                  <Input
+                    id="endereco.uf" name="endereco.uf"
+                    value={formData.endereco.uf} onChange={handleInputChange}
+                    disabled={enderecoTravado} maxLength={2} required
+                    className="border-0 text-sm"
+                    style={{ backgroundColor: enderecoTravado ? '#E8E8EC' : '#F3F3F5', color: '#1E2939' }}
+                  />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="endereco.logradouro">Logradouro</Label>
-                <Input id="endereco.logradouro" name="endereco.logradouro" value={formData.endereco.logradouro} onChange={handleInputChange} required disabled={enderecoTravado} />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="endereco.numero">Nº</Label>
-                  <Input id="endereco.numero" name="endereco.numero" value={formData.endereco.numero} onChange={handleInputChange} required  />
+
+              <div className="space-y-1.5">
+                <Label htmlFor="endereco.logradouro" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Logradouro</Label>
+                <div className="relative">
+                  <Home className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#717182' }} />
+                  <Input
+                    id="endereco.logradouro" name="endereco.logradouro"
+                    value={formData.endereco.logradouro} onChange={handleInputChange}
+                    required disabled={enderecoTravado}
+                    className="pl-9 border-0 text-sm"
+                    style={{ backgroundColor: enderecoTravado ? '#E8E8EC' : '#F3F3F5', color: '#1E2939' }}
+                  />
                 </div>
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="endereco.bairro">Bairro</Label>
-                  <Input id="endereco.bairro" name="endereco.bairro" value={formData.endereco.bairro} onChange={handleInputChange} required disabled={enderecoTravado} />
+              </div>
+
+              {/* Número + Bairro */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="endereco.numero" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Número</Label>
+                  <Input
+                    id="endereco.numero" name="endereco.numero"
+                    value={formData.endereco.numero} onChange={handleInputChange} required
+                    className="border-0 text-sm"
+                    style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="endereco.bairro" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Bairro</Label>
+                  <Input
+                    id="endereco.bairro" name="endereco.bairro"
+                    value={formData.endereco.bairro} onChange={handleInputChange}
+                    required disabled={enderecoTravado}
+                    className="border-0 text-sm"
+                    style={{ backgroundColor: enderecoTravado ? '#E8E8EC' : '#F3F3F5', color: '#1E2939' }}
+                  />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="endereco.cidade">Cidade</Label>
-                <Input id="endereco.cidade" name="endereco.cidade" value={formData.endereco.cidade} onChange={handleInputChange} required disabled={enderecoTravado}/>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="endereco.cidade" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Cidade</Label>
+                <Input
+                  id="endereco.cidade" name="endereco.cidade"
+                  value={formData.endereco.cidade} onChange={handleInputChange}
+                  required disabled={enderecoTravado}
+                  className="border-0 text-sm"
+                  style={{ backgroundColor: enderecoTravado ? '#E8E8EC' : '#F3F3F5', color: '#1E2939' }}
+                />
               </div>
             </div>
           </div>
 
-          {/* Dados Específicos */}
-          <div className="space-y-4 border-t pt-6">
-            <h3 className="font-semibold text-lg">
-              {isOwner ? 'Contato de Emergência' : 'Informações Profissionais'}
-            </h3>
+          {/* Third section */}
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-bold text-base mb-2" style={{ color: '#1E2939' }}>
+                {isOwner ? 'Contato de Emergência' : 'Informações de Cuidador'}
+              </h3>
+              <hr style={{ borderColor: '#EEDFD3' }} />
+            </div>
+
             {isOwner ? (
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="contatoEmergenciaNome">Nome do Contato</Label>
-                  <Input id="contatoEmergenciaNome" name="contatoEmergenciaNome" value={formData.contatoEmergenciaNome} onChange={handleInputChange} required />
+                <div className="space-y-1.5">
+                  <Label htmlFor="contatoEmergenciaNome" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Nome Completo</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#717182' }} />
+                    <Input
+                      id="contatoEmergenciaNome" name="contatoEmergenciaNome"
+                      value={formData.contatoEmergenciaNome} onChange={handleInputChange} required
+                      className="pl-9 border-0 text-sm"
+                      style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contatoEmergenciaTelefone">Telefone do Contato</Label>
-                  <Input id="contatoEmergenciaTelefone" name="contatoEmergenciaTelefone" value={formData.contatoEmergenciaTelefone} onChange={handleInputChange} required />
+                <div className="space-y-1.5">
+                  <Label htmlFor="contatoEmergenciaTelefone" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Telefone</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#717182' }} />
+                    <Input
+                      id="contatoEmergenciaTelefone" name="contatoEmergenciaTelefone"
+                      value={formData.contatoEmergenciaTelefone} onChange={handleInputChange} required
+                      placeholder="(00) 00000-0000"
+                      className="pl-9 border-0 text-sm"
+                      style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="valorDiaria">Valor da Diária (R$)</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="valorDiaria" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Valor da Diária (R$)</Label>
                     <div className="relative">
-                      <CreditCard className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                      <Input id="valorDiaria" name="valorDiaria" type="number" step="0.01" min="0" value={formData.valorDiaria} onChange={handleInputChange} className="pl-10" required />
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#717182' }} />
+                      <Input
+                        id="valorDiaria" name="valorDiaria"
+                        type="number" step="0.01" min="0"
+                        value={formData.valorDiaria} onChange={handleInputChange} required
+                        className="pl-9 border-0 text-sm"
+                        style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                      />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Especialidades</Label>
-                    <div className="flex flex-col gap-2 pt-1">
-                      {[
-                        { value: 'Cachorro', label: '🐶 Cachorro' },
-                        { value: 'Gato',     label: '🐱 Gato'     },
-                      ].map(({ value, label }) => {
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold" style={{ color: '#1E2939' }}>Especialidade</Label>
+                    <div className="flex gap-3 pt-1">
+                      {[{ value: 'Cachorro', label: '🐶 Cães' }, { value: 'Gato', label: '🐱 Gatos' }].map(({ value, label }) => {
                         const checked = formData.especialidades.includes(value);
                         return (
                           <label
                             key={value}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all select-none ${
-                              checked
-                                ? 'border-amber-400 bg-amber-50 text-amber-800'
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-amber-200 hover:bg-amber-50/40'
-                            }`}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all select-none text-sm font-medium"
+                            style={{
+                              borderColor: checked ? brandColor : '#EEDFD3',
+                              backgroundColor: checked ? '#FFEDD4' : '#FFFFFF',
+                              color: checked ? '#1E2939' : '#717182',
+                            }}
                           >
                             <input
                               type="checkbox"
-                              className="accent-amber-500 w-4 h-4"
+                              className="w-4 h-4"
+                              style={{ accentColor: brandColor }}
                               checked={checked}
                               onChange={() =>
                                 setFormData((prev) => ({
@@ -377,31 +480,39 @@ export function RegisterPage({ userType, onBack, onSuccess }: RegisterPageProps)
                                 }))
                               }
                             />
-                            <span className="font-medium">{label}</span>
+                            {label}
                           </label>
                         );
                       })}
                     </div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bio">Bio / Descrição</Label>
-                  <Textarea id="bio" name="bio" value={formData.bio} onChange={handleInputChange} placeholder="Conte um pouco sobre sua experiência com pets..." className="min-h-[100px]" required />
+                <div className="space-y-1.5">
+                  <Label htmlFor="bio" className="text-sm font-semibold" style={{ color: '#1E2939' }}>Descrição e Biografia</Label>
+                  <Textarea
+                    id="bio" name="bio"
+                    value={formData.bio} onChange={handleInputChange}
+                    placeholder="Conte um pouco sobre você e sua experiência com pets..."
+                    required
+                    className="min-h-[120px] border-0 text-sm resize-none"
+                    style={{ backgroundColor: '#F3F3F5', color: '#1E2939' }}
+                  />
                 </div>
               </div>
             )}
           </div>
 
-          <Button
+          {/* Submit */}
+          <button
             type="submit"
-            className="w-full text-white h-12 text-lg"
-            style={{ backgroundColor: isOwner ? '#f97316' : '#d97706' }}
             disabled={loading}
+            className="w-full py-5 rounded-full font-bold text-white text-lg transition-opacity hover:opacity-90 disabled:opacity-60"
+            style={{ backgroundColor: brandColor }}
           >
             {loading ? 'Cadastrando...' : 'Finalizar Cadastro'}
-          </Button>
+          </button>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }

@@ -74,6 +74,38 @@ export interface UpdateCuidadorRequest {
   especialidades: string[];
 }
 
+export interface UpdateDonoRequest {
+  nome: string;
+  telefone: string;
+  endereco?: {
+    cep: string;
+    logradouro: string;
+    numero: string;
+    complemento: string;
+    bairro: string;
+    cidade: string;
+    uf: string;
+  };
+  contatoEmergenciaNome?: string;
+  contatoEmergenciaTelefone?: string;
+}
+
+export interface Dono {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+  endereco?: CuidadorEndereco;
+  contatoEmergenciaNome?: string;
+  contatoEmergenciaTelefone?: string;
+}
+
+export const donosApi = {
+  getMeuPerfil: () => apiRequest<Dono>('/api/Donos/meu-perfil', 'GET'),
+  updateProfile: (data: UpdateDonoRequest) =>
+    apiRequest<Dono>('/api/Donos/meu-perfil', 'PUT', data),
+};
+
 export const cuidadoresApi = {
   getAll: () => apiRequest<Cuidador[]>('/api/Cuidadores', 'GET'),
   getById: (id: string) => apiRequest<Cuidador>(`/api/Cuidadores/${id}`, 'GET'),
@@ -152,6 +184,19 @@ export const reservasApi = {
     apiRequest<Reserva>(`/api/reservas/${id}/status`, 'PATCH', { novoStatus: status }),
   finalizar: (id: string) =>
     apiRequest<Reserva>(`/api/Reservas/${id}/finalizar`, 'PATCH'),
+};
+
+export interface ChatMensagem {
+  id?: string;
+  remetenteId: string;
+  remetenteNome: string;
+  conteudo: string;
+  enviadoEm: string;
+}
+
+export const chatApi = {
+  getHistorico: (reservaId: string) =>
+    apiRequest<ChatMensagem[]>(`/api/Chat/${reservaId}`, 'GET'),
 };
 
 export interface Avaliacao {

@@ -2,23 +2,34 @@
 
 :root {
   --font-size: 16px;
-  --background: #ffffff;
-  --foreground: oklch(0.145 0 0);
-  --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: #030213;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.0058 264.53);
-  --secondary-foreground: #030213;
-  --muted: #ececf0;
+  /* Brand palette */
+  --brand-bg: #FFFBEB;
+  --brand-border: #EEDFD3;
+  --brand-card: #FFFFFF;
+  --brand-form: #F3F3F5;
+  --brand-text-secondary: #717182;
+  --brand-text-primary: #1E2939;
+  --brand-accent-pale: #FFEDD4;
+  --brand-caregiver: #FE9A00;
+  --brand-owner: #FF6900;
+
+  --background: #FFFBEB;
+  --foreground: #1E2939;
+  --card: #FFFFFF;
+  --card-foreground: #1E2939;
+  --popover: #FFFFFF;
+  --popover-foreground: #1E2939;
+  --primary: #FF6900;
+  --primary-foreground: #FFFFFF;
+  --secondary: #FFEDD4;
+  --secondary-foreground: #1E2939;
+  --muted: #EEDFD3;
   --muted-foreground: #717182;
-  --accent: #e9ebef;
-  --accent-foreground: #030213;
+  --accent: #FFEDD4;
+  --accent-foreground: #1E2939;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.1);
+  --border: #EEDFD3;
   --input: transparent;
   --input-background: #f3f3f5;
   --switch-background: #cbced4;
@@ -178,4 +189,111 @@
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
+}
+
+/* ─── PetConnect Dark Mode — overrides para classes Tailwind e elementos comuns ─── */
+
+html.dark .bg-white {
+  background-color: #1E293B !important;
+}
+
+html.dark .text-gray-800,
+html.dark .text-gray-900 {
+  color: #E2E8F0 !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-gray-600 {
+  color: #CBD5E1 !important;
+}
+
+html.dark .text-gray-500,
+html.dark .text-gray-400 {
+  color: #94A3B8 !important;
+}
+
+html.dark .border-gray-200,
+html.dark .border-gray-100,
+html.dark .border-orange-200,
+html.dark .border-orange-100 {
+  border-color: #334155 !important;
+}
+
+html.dark .bg-orange-50,
+html.dark .bg-amber-50,
+html.dark .bg-gray-50,
+html.dark .bg-orange-50\/40 {
+  background-color: #1E293B !important;
+}
+
+html.dark .bg-gray-100 {
+  background-color: #0F172A !important;
+}
+
+html.dark .hover\:bg-orange-50:hover,
+html.dark .hover\:bg-orange-50\/40:hover,
+html.dark .hover\:bg-gray-50:hover {
+  background-color: #1E293B !important;
+}
+
+/* Cards e sombras */
+html.dark .shadow-sm {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+}
+html.dark .shadow-md {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+}
+html.dark .shadow-2xl {
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Inputs, selects e textareas com estilos inline — usa background e cor corretos */
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+  background-color: #0F172A !important;
+  color: #E2E8F0 !important;
+  border-color: #334155 !important;
+}
+html.dark select {
+  background-color: #0F172A !important;
+  color: #E2E8F0 !important;
+  border-color: #334155 !important;
+}
+html.dark textarea {
+  background-color: #0F172A !important;
+  color: #E2E8F0 !important;
+  border-color: #334155 !important;
+}
+
+/* Dividers */
+html.dark .divide-y > * {
+  border-color: #1E293B !important;
+}
+
+/* Scrollbar dark */
+html.dark ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+html.dark ::-webkit-scrollbar-track {
+  background: #0F172A;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 999px;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ── Texto interno em cards brancos convertidos para dark ── */
+html.dark .text-gray-600 { color: #CBD5E1 !important; }
+html.dark .text-gray-500 { color: #94A3B8 !important; }
+
+/* Modal overlays ficam mais escuros */
+html.dark .bg-black\/50 { background-color: rgba(0,0,0,0.75) !important; }
+html.dark .bg-black\/60 { background-color: rgba(0,0,0,0.80) !important; }
+
+/* LoginPage e RegisterPage */
+html.dark .min-h-screen:not(.flex) {
+  background-color: #0F172A !important;
 }
